@@ -21,6 +21,35 @@ import socket
 import threading
 import subprocess
 
+
+def _ensure_std_streams():
+    """In a windowed frozen EXE (console=False) sys.stdout/sys.stderr are None.
+    Anything that writes to them then crashes — notably docx2pdf's tqdm progress
+    bar during PDF preview ("NoneType has no attribute 'write'"). Point the
+    missing streams at a log file (falling back to devnull) so those writes
+    succeed and we capture server logs / tracebacks for debugging.
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        log_dir = os.path.join(
+            os.environ.get("APPDATA") or os.path.expanduser("~"), "WellTools"
+        )
+        os.makedirs(log_dir, exist_ok=True)
+        stream = open(os.path.join(log_dir, "welltools.log"), "a",
+                      buffering=1, encoding="utf-8", errors="replace")
+    except OSError:
+        stream = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = stream
+    if sys.stderr is None:
+        sys.stderr = stream
+
+
+_ensure_std_streams()
+
 import uvicorn
 import webview
 
