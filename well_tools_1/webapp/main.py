@@ -37,7 +37,11 @@ from well_tools.report.report_builder import (  # noqa: E402
 
 from .db import init_db, get_db, SessionLocal  # noqa: E402
 from .models import Template, ReportRun  # noqa: E402
-from .registry import seed_templates_from_manifest  # noqa: E402
+from .registry import (  # noqa: E402
+    seed_templates_from_manifest,
+    register_template,
+    delete_template,
+)
 from .config import TEMPLATES_DIR  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 from .interval import generate_raw_data, IntervalInputError  # noqa: E402
@@ -84,6 +88,20 @@ class PreviewResponse(BaseModel):
     page_count: int
     pages: list[str]   # PNG data URIs, one per page
     pdf_path: str
+
+
+class TemplateRegisterRequest(BaseModel):
+    file_path: str = Field(..., description="Absolute path to the .docx file (from native picker)")
+    name: str = Field(..., description="Human-readable label shown in the dropdown")
+    config_key: str = Field(..., description="Configuration key, e.g. '4.5-7-9-13'")
+
+
+class TemplateRegisterResponse(BaseModel):
+    id: int
+    name: str
+    config_key: str
+    file_path: str
+    created: bool   # True = new, False = updated existing
 
 
 class IntervalRequest(BaseModel):
@@ -173,6 +191,49 @@ def list_templates(db: Session = Depends(get_db)):
     """Registry rows for populating the template dropdown."""
     rows = db.query(Template).order_by(Template.damage_count, Template.config_key).all()
     return [_template_to_dict(t) for t in rows]
+
+
+@app.post("/api/templates/register", response_model=TemplateRegisterResponse)
+def template_register(req: TemplateRegisterRequest, db: Session = Depends(get_db)):
+    """Copy a .docx into the templates directory and register it.
+    If a template with the same config_key already exists it is updated."""
+    req.name = req.name.strip()
+    req.config_key = req.config_key.strip()
+    if not req.name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+    if not req.config_key:
+        raise HTTPException(status_code=400, detail="Configuration key is required.")
+
+    # Was there an existing entry for this config_key before registering?
+    existing_before = (
+        db.query(Template).filter_by(config_key=req.config_key, damage_count=0).one_or_none()
+    )
+    try:
+        t = register_template(db, req.name, req.config_key, req.file_path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Template registration failed")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {e}")
+
+    return TemplateRegisterResponse(
+        id=t.id,
+        name=t.name,
+        config_key=t.config_key,
+        file_path=t.file_path,
+        created=existing_before is None,
+    )
+
+
+@app.delete("/api/templates/{template_id}")
+def template_delete(template_id: int, db: Session = Depends(get_db)):
+    """Remove a template from the registry (does not delete the .docx file)."""
+    found = delete_template(db, template_id, remove_file=False)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Template {template_id} not found.")
+    return {"ok": True, "deleted_id": template_id}
 
 
 @app.post("/api/report/generate", response_model=GenerateResponse)

@@ -7,6 +7,15 @@ const els = {
   // mode
   modeReport: $("modeReport"),
   modeInterval: $("modeInterval"),
+  modeTemplates: $("modeTemplates"),
+  // template manager
+  tmPickFile: $("tmPickFile"),
+  tmFilePath: $("tmFilePath"),
+  tmName: $("tmName"),
+  tmConfigKey: $("tmConfigKey"),
+  tmRegister: $("tmRegister"),
+  tmStatus: $("tmStatus"),
+  tmList: $("tmList"),
   // interval generator
   pickXml: $("pickXml"),
   xmlPath: $("xmlPath"),
@@ -42,6 +51,7 @@ const state = {
 };
 
 const ivState = { xmlPath: null, templatePath: null };
+const tmState = { filePath: null };
 
 // --- pywebview bridge -------------------------------------------------------
 function pyapi() {
@@ -49,12 +59,13 @@ function pyapi() {
 }
 
 // --- View navigation --------------------------------------------------------
-const VIEWS = ["mode", "interval", "inputs", "workspace"];
+const VIEWS = ["mode", "interval", "inputs", "workspace", "templates"];
 function showView(name) {
   for (const v of VIEWS) {
     const el = document.getElementById(`view-${v}`);
     if (el) el.hidden = v !== name;
   }
+  if (name === "templates") tmLoadList();
 }
 
 // --- Template registry ------------------------------------------------------
@@ -249,6 +260,122 @@ function setLoading(loading) {
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 
+// --- Template Manager -------------------------------------------------------
+async function tmPickFile() {
+  const api = pyapi();
+  if (!api) return tmShowStatus("error", "Native file dialogs are only available in the desktop app.");
+  const p = await api.pick_file(["Word templates (*.docx)", "All files (*.*)"]);
+  if (p) {
+    tmState.filePath = p;
+    els.tmFilePath.textContent = p;
+    els.tmFilePath.classList.remove("muted");
+    // Auto-fill config key from filename if the field is empty.
+    if (!els.tmConfigKey.value.trim()) {
+      const stem = p.split(/[\\/]/).pop().replace(/\.docx$/i, "");
+      // strip leading "sample_N_" prefix if present, convert p→. and X→×
+      const cleaned = stem
+        .replace(/^sample_\d+_/i, "")
+        .replace(/p/g, ".")
+        .replace(/X/g, "×");
+      els.tmConfigKey.value = cleaned;
+    }
+  }
+}
+
+async function tmRegister() {
+  const name = els.tmName.value.trim();
+  const configKey = els.tmConfigKey.value.trim();
+  if (!tmState.filePath) return tmShowStatus("error", "Please choose a .docx file.");
+  if (!name) return tmShowStatus("error", "Please enter a display name.");
+  if (!configKey) return tmShowStatus("error", "Please enter a configuration key.");
+
+  els.tmRegister.disabled = true;
+  els.tmRegister.textContent = "Registering…";
+  hide(els.tmStatus);
+
+  try {
+    const res = await fetch("/api/templates/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: tmState.filePath, name, config_key: configKey }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      tmShowStatus("error", data.detail || `HTTP ${res.status}`);
+      return;
+    }
+    const verb = data.created ? "registered" : "updated";
+    tmShowStatus("success", `✓ Template "${escapeHtml(data.name)}" ${verb} (${escapeHtml(data.config_key)})`);
+    // Reset form.
+    els.tmName.value = "";
+    els.tmConfigKey.value = "";
+    els.tmFilePath.textContent = "No file selected";
+    els.tmFilePath.classList.add("muted");
+    tmState.filePath = null;
+    // Refresh list + invalidate report dropdown cache.
+    state.templatesLoaded = false;
+    await tmLoadList();
+  } catch (err) {
+    tmShowStatus("error", `Request failed: ${err.message || err}`);
+  } finally {
+    els.tmRegister.disabled = false;
+    els.tmRegister.textContent = "Register Template";
+  }
+}
+
+async function tmDelete(id, name) {
+  if (!confirm(`Remove "${name}" from the registry?\n\nThe .docx file is kept on disk.`)) return;
+  try {
+    const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      tmShowStatus("error", data.detail || `HTTP ${res.status}`);
+      return;
+    }
+    state.templatesLoaded = false;
+    await tmLoadList();
+  } catch (err) {
+    tmShowStatus("error", `Delete failed: ${err.message || err}`);
+  }
+}
+
+async function tmLoadList() {
+  els.tmList.innerHTML = `<p class="tm-empty">Loading…</p>`;
+  try {
+    const res = await fetch("/api/templates");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    if (!rows.length) {
+      els.tmList.innerHTML = `<p class="tm-empty">No templates registered yet.</p>`;
+      return;
+    }
+    els.tmList.innerHTML = "";
+    rows.forEach((t) => {
+      const row = document.createElement("div");
+      row.className = "tm-row-item";
+      row.innerHTML = `
+        <div class="tm-info">
+          <span class="tm-name">${escapeHtml(t.name)}</span>
+          <span class="tm-key">${escapeHtml(t.config_key)}</span>
+        </div>
+        <button class="secondary tm-del-btn" data-id="${t.id}" data-name="${escapeHtml(t.name)}">Remove</button>`;
+      row.querySelector(".tm-del-btn").addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        tmDelete(Number(btn.dataset.id), btn.dataset.name);
+      });
+      els.tmList.appendChild(row);
+    });
+  } catch (err) {
+    els.tmList.innerHTML = `<p class="tm-empty" style="color:var(--error-fg)">Failed to load: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function tmShowStatus(kind, msg) {
+  els.tmStatus.hidden = false;
+  els.tmStatus.className = `status ${kind}`;
+  els.tmStatus.innerHTML = escapeHtml(msg);
+}
+
 // --- Interval Generator -----------------------------------------------------
 async function pickXml() {
   const api = pyapi();
@@ -344,6 +471,10 @@ function escapeHtml(s) {
 // --- Wire up ----------------------------------------------------------------
 els.modeReport.addEventListener("click", () => showView("inputs"));
 els.modeInterval.addEventListener("click", () => showView("interval"));
+els.modeTemplates.addEventListener("click", () => showView("templates"));
+
+els.tmPickFile.addEventListener("click", tmPickFile);
+els.tmRegister.addEventListener("click", tmRegister);
 document.querySelectorAll("[data-nav]").forEach((b) =>
   b.addEventListener("click", () => showView(b.getAttribute("data-nav")))
 );

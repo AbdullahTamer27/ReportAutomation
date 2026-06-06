@@ -22,8 +22,56 @@
           <span class="mode-title">Interval Generator</span>
           <span class="mode-desc">Build depth-interval tables from WellSchematic XML.</span>
         </button>
+        <button type="button" class="mode-card" id="modeTemplates">
+          <span class="mode-title">Template Manager</span>
+          <span class="mode-desc">Register, update, or remove report templates without restarting.</span>
+        </button>
       </div>
     </div>
+  </section>
+
+  <!-- ===== View: Template Manager ===== -->
+  <section id="view-templates" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Template Manager</h1>
+        <p class="subtitle">Add or remove report templates. Changes take effect immediately — no restart needed.</p>
+      </header>
+
+      <!-- Add form -->
+      <div class="tm-add-box">
+        <h3 class="tm-section-title">Register a new template</h3>
+
+        <div class="field">
+          <label>Template file (.docx)</label>
+          <div class="picker">
+            <button id="tmPickFile" type="button" class="secondary">Choose .docx…</button>
+            <span id="tmFilePath" class="path muted">No file selected</span>
+          </div>
+        </div>
+
+        <div class="tm-row">
+          <div class="field" style="flex:1">
+            <label for="tmName">Display name</label>
+            <input type="text" id="tmName" class="text-input" placeholder="e.g. 4.5 – 7 – 9 – 13" />
+          </div>
+          <div class="field" style="flex:1">
+            <label for="tmConfigKey">Configuration key</label>
+            <input type="text" id="tmConfigKey" class="text-input" placeholder="e.g. 4.5-7-9-13" />
+          </div>
+        </div>
+
+        <button id="tmRegister" type="button" class="primary" style="margin-top:4px">Register Template</button>
+        <div id="tmStatus" class="status" hidden></div>
+      </div>
+
+      <!-- Current templates list -->
+      <div class="tm-list-box">
+        <h3 class="tm-section-title">Registered templates</h3>
+        <div id="tmList" class="tm-list"></div>
+      </div>
+    </main>
   </section>
 
   <!-- ===== View: Interval Generator ===== -->

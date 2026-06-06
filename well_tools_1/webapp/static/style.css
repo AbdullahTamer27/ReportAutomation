@@ -335,6 +335,85 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .hint-warn { color: var(--error-fg); font-weight: 600; }
 
+/* ===== Template manager ===== */
+.tm-add-box {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px 22px;
+  margin-bottom: 24px;
+}
+.tm-list-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tm-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+}
+.tm-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.tm-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+.tm-row-item:hover { border-color: var(--border-strong); }
+.tm-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tm-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-key {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+.tm-del-btn {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  color: var(--error-fg);
+  border-color: rgba(251,113,133,0.25);
+  background: rgba(251,113,133,0.08);
+}
+.tm-del-btn:hover:not(:disabled) {
+  background: rgba(251,113,133,0.16);
+  border-color: var(--error-fg);
+}
+.tm-empty {
+  font-size: 13.5px;
+  color: var(--muted);
+  padding: 10px 0;
+  margin: 0;
+}
+
+/* add the template-manager icon badge */
+#modeTemplates.mode-card::before { content: "🗂️"; }
+
 /* ===== Interval generator ===== */
 .iv-summary {
   font-size: 13px;
