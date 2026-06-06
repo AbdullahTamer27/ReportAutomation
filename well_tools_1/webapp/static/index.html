@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+  <div class="layout">
   <main class="card">
     <header>
       <h1>Report Automation</h1>
@@ -43,6 +44,15 @@
 
     <div id="status" class="status" hidden></div>
   </main>
+
+  <aside id="previewPanel" class="preview" hidden>
+    <header class="preview-header">
+      <h2>Preview</h2>
+      <span id="previewMeta" class="muted"></span>
+    </header>
+    <div id="previewBody" class="preview-body"></div>
+  </aside>
+  </div>
 
   <script type="module" src="/static/app.js"></script>
 </body>

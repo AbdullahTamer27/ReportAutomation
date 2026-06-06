@@ -11,6 +11,9 @@ const els = {
   folderPath: $("folderPath"),
   generate: $("generate"),
   status: $("status"),
+  previewPanel: $("previewPanel"),
+  previewMeta: $("previewMeta"),
+  previewBody: $("previewBody"),
 };
 
 const state = {
@@ -159,6 +162,44 @@ function showSuccess(data) {
   );
   const btn = $("revealBtn");
   if (btn) btn.addEventListener("click", () => reveal(data.output_path));
+  // Automatically render the PDF preview (not live; after generation).
+  requestPreview(data.run_id);
+}
+
+// --- Preview ----------------------------------------------------------------
+async function requestPreview(runId) {
+  els.previewPanel.hidden = false;
+  els.previewMeta.textContent = "";
+  els.previewBody.innerHTML =
+    `<div class="preview-status"><span class="spinner"></span> Rendering preview…</div>`;
+
+  try {
+    const res = await fetch(`/api/preview/${runId}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data && data.detail ? data.detail : `HTTP ${res.status}`;
+      els.previewBody.innerHTML =
+        `<div class="preview-status preview-error">Preview unavailable: ${escapeHtml(detail)}</div>`;
+      return;
+    }
+    renderPreview(data);
+  } catch (err) {
+    els.previewBody.innerHTML =
+      `<div class="preview-status preview-error">Preview request failed: ${escapeHtml(err.message || err)}</div>`;
+  }
+}
+
+function renderPreview(data) {
+  els.previewMeta.textContent =
+    `${data.page_count} page${data.page_count === 1 ? "" : "s"}`;
+  els.previewBody.innerHTML = "";
+  data.pages.forEach((src, i) => {
+    const img = document.createElement("img");
+    img.className = "preview-page";
+    img.src = src;
+    img.alt = `Page ${i + 1}`;
+    els.previewBody.appendChild(img);
+  });
 }
 
 function setLoading(loading) {

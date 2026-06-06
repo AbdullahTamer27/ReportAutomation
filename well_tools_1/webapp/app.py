@@ -107,9 +107,9 @@ def main():
         "Report Automation",
         url=f"http://127.0.0.1:{port}/",
         js_api=api,
-        width=920,
-        height=760,
-        min_size=(720, 600),
+        width=1180,
+        height=820,
+        min_size=(820, 640),
     )
     api.set_window(window)
     webview.start()

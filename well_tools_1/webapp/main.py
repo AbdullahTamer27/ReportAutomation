@@ -13,6 +13,7 @@ Then open http://127.0.0.1:8000/docs to try the endpoints.
 
 import os
 import sys
+import base64
 import logging
 from datetime import datetime
 
@@ -37,6 +38,7 @@ from .db import init_db, get_db, SessionLocal  # noqa: E402
 from .models import Template, ReportRun  # noqa: E402
 from .registry import seed_templates_from_manifest  # noqa: E402
 from .config import TEMPLATES_DIR  # noqa: E402
+from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -70,6 +72,13 @@ class GenerateResponse(BaseModel):
     status: str
     output_path: str
     filename: str
+
+
+class PreviewResponse(BaseModel):
+    run_id: int
+    page_count: int
+    pages: list[str]   # PNG data URIs, one per page
+    pdf_path: str
 
 
 # --- App ---------------------------------------------------------------------
@@ -172,6 +181,42 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         status=run.status,
         output_path=output_path,
         filename=os.path.basename(output_path),
+    )
+
+
+@app.post("/api/preview/{run_id}", response_model=PreviewResponse)
+def preview_run(run_id: int, db: Session = Depends(get_db)):
+    """Render the run's .docx to PDF then to PNG page images.
+
+    Sync endpoint (runs in the threadpool) so the blocking Word conversion stays
+    off the event loop. COM is initialized per-call on Windows. If Word/preview
+    isn't available, returns 503 with a clear message — the .docx is unaffected.
+    """
+    run = db.get(ReportRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run id {run_id} not found.")
+    if run.status != "success" or not run.output_docx_path:
+        raise HTTPException(status_code=400, detail="This run has no generated document to preview.")
+
+    pdf_path = os.path.join(OUTPUTS_DIR, f"run_{run_id}.pdf")
+    try:
+        page_pngs = generate_preview(run.output_docx_path, pdf_path, dpi=PREVIEW_DPI)
+    except PreviewError as e:
+        logger.warning("Preview unavailable for run %s: %s", run_id, e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Preview failed for run %s", run_id)
+        raise HTTPException(status_code=500, detail=f"Preview failed: {e}")
+
+    pages = [
+        "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        for png in page_pngs
+    ]
+    return PreviewResponse(
+        run_id=run_id,
+        page_count=len(pages),
+        pages=pages,
+        pdf_path=pdf_path,
     )
 
 
