@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Automation</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>Report Automation</h1>
+      <p class="subtitle">Generate a well-integrity report from a template, your Excel data, and a working folder.</p>
+    </header>
+
+    <section class="field">
+      <label for="damageSelect">Damage count</label>
+      <select id="damageSelect"></select>
+    </section>
+
+    <section class="field">
+      <label for="templateSelect">Template</label>
+      <select id="templateSelect"></select>
+    </section>
+
+    <section class="field">
+      <label>Excel data file</label>
+      <div class="picker">
+        <button id="pickExcel" type="button" class="secondary">Choose Excel…</button>
+        <span id="excelPath" class="path muted">No file selected</span>
+      </div>
+    </section>
+
+    <section class="field">
+      <label>Working directory</label>
+      <div class="picker">
+        <button id="pickFolder" type="button" class="secondary">Choose Folder…</button>
+        <span id="folderPath" class="path muted">No folder selected</span>
+      </div>
+    </section>
+
+    <button id="generate" type="button" class="primary">Generate Report</button>
+
+    <div id="status" class="status" hidden></div>
+  </main>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

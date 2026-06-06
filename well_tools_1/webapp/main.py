@@ -17,6 +17,8 @@ import logging
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -71,7 +73,18 @@ class GenerateResponse(BaseModel):
 
 
 # --- App ---------------------------------------------------------------------
-app = FastAPI(title="Report Automation — Web API", version="0.2.0")
+app = FastAPI(title="Report Automation — Web API", version="0.3.0")
+
+# Serve the vanilla frontend from webapp/static/.
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/")
+def index():
+    """Serve the single-page frontend."""
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.on_event("startup")
