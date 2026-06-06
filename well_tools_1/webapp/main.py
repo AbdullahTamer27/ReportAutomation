@@ -26,9 +26,12 @@ from sqlalchemy.orm import Session
 
 # --- Make the sibling `well_tools` package importable regardless of CWD -------
 # webapp/main.py -> webapp/ -> well_tools_1/  (which contains `well_tools`)
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+# In dev mode, make well_tools importable from well_tools_1/.
+# When frozen by PyInstaller, sys.path is already managed — skip this.
+if not getattr(sys, "frozen", False):
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
 
 from well_tools.report.report_builder import (  # noqa: E402
     build_automation_report,
@@ -124,7 +127,15 @@ class IntervalResponse(BaseModel):
 app = FastAPI(title="Report Automation — Web API", version="0.3.0")
 
 # Serve the vanilla frontend from webapp/static/.
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# When frozen, __file__ is inside sys._MEIPASS (the bundled tree).
+# In dev, it is next to this source file.  Both resolve the same relative path.
+_HERE = (
+    sys._MEIPASS
+    if getattr(sys, "frozen", False)
+    else os.path.dirname(os.path.abspath(__file__))
+)
+STATIC_DIR = os.path.join(_HERE, "webapp", "static") if getattr(sys, "frozen", False) \
+    else os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

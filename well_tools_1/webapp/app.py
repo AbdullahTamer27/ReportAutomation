@@ -24,10 +24,12 @@ import subprocess
 import uvicorn
 import webview
 
-# Make this runnable both as `python -m webapp.app` and `python webapp/app.py`.
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # well_tools_1/
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+# In dev mode, make well_tools importable from well_tools_1/.
+# When frozen by PyInstaller, sys.path is already managed — skip this.
+if not getattr(sys, "frozen", False):
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
 
 from webapp.main import app  # noqa: E402
 
