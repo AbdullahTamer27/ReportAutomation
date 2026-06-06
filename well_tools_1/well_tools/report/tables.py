@@ -34,6 +34,24 @@ JOINT_NO_IDX = 0
 BODY_LEN_IDX = 3
 MAX_LOSS_IDX = 7
 GRADE_IDX = 8
+DAMAGE_IDX = 9
+
+# Damage Profile bar capping — stops long bars from widening/wrapping the cell.
+DAMAGE_COL_WIDTH_IN = 2.05      # Word column width for the Damage Profile column
+DAMAGE_CELL_MARGIN_IN = 0.08    # default Word side margin, per side
+BAR_FONT_PT = 10.0              # font size of the bar text
+BAR_CHAR_EM = 0.6              # bar glyph width as a fraction of the font size
+                               # (0.6 ≈ a full block █, the widest common case)
+
+
+def _max_bar_chars():
+    """Max bar characters that fit the Damage Profile column width."""
+    usable_in = DAMAGE_COL_WIDTH_IN - 2 * DAMAGE_CELL_MARGIN_IN
+    char_in = (BAR_FONT_PT / 72.0) * BAR_CHAR_EM
+    return max(1, int(usable_in // char_in))
+
+
+MAX_BAR_CHARS = _max_bar_chars()
 
 # Valid joint (body) length range, in feet. Outside this gets flagged.
 BODY_LEN_MIN = 28.0
@@ -217,7 +235,11 @@ def fill_table(table, data_rows, table_name=None, review=None):
             # Review + correct grade before writing the cells.
             review_row(table_name, vals, review)
             for i in range(10):
-                set_cell_text(cells[i], fmt(vals[i], i))
+                text = fmt(vals[i], i)
+                # Cap the Damage Profile bar so a long bar can't widen/wrap the cell.
+                if i == DAMAGE_IDX and isinstance(vals[i], str) and len(text) > MAX_BAR_CHARS:
+                    text = text[:MAX_BAR_CHARS]
+                set_cell_text(cells[i], text)
             grade = str(vals[8]).strip()
             if grade in GRADE_COLORS:
                 set_cell_bg(cells[8], GRADE_COLORS[grade])
