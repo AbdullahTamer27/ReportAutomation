@@ -12,6 +12,7 @@ Then open http://127.0.0.1:8000/docs to try the endpoints.
 """
 
 import os
+import re
 import sys
 import base64
 import logging
@@ -39,6 +40,7 @@ from .models import Template, ReportRun  # noqa: E402
 from .registry import seed_templates_from_manifest  # noqa: E402
 from .config import TEMPLATES_DIR  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
+from .interval import generate_raw_data, IntervalInputError  # noqa: E402
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -64,11 +66,13 @@ class GenerateRequest(BaseModel):
     template_id: int = Field(..., description="ID of a registered template (see GET /api/templates)")
     excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
     working_dir: str = Field(..., description="Folder holding images (IMGS/ or itself); the report is saved here")
+    well_name: str | None = Field(None, description="Well name; used for the output filename and recorded in history")
 
 
 class GenerateResponse(BaseModel):
     run_id: int
     template_id: int
+    well_name: str | None = None
     status: str
     output_path: str
     filename: str
@@ -79,6 +83,22 @@ class PreviewResponse(BaseModel):
     page_count: int
     pages: list[str]   # PNG data URIs, one per page
     pdf_path: str
+
+
+class IntervalRequest(BaseModel):
+    xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml file")
+    template_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm template to update in place")
+
+
+class IntervalResponse(BaseModel):
+    template_path: str
+    num_pipes: int
+    pipe_types: dict
+    depth_min: float
+    depth_max: float
+    num_intervals: int
+    thickness_note: str
+    preview: str
 
 
 # --- App ---------------------------------------------------------------------
@@ -111,6 +131,27 @@ def _startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/interval/generate", response_model=IntervalResponse)
+def interval_generate(req: IntervalRequest):
+    """Interval Generator: parse the XML and update the template's 'Raw Data'
+    sheet in place (same behavior as the desktop tool's template path)."""
+    logger.info("Interval generate | xml=%s | template=%s", req.xml_path, req.template_path)
+    try:
+        result = generate_raw_data(req.xml_path, req.template_path)
+    except IntervalInputError as e:
+        logger.warning("Interval input error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError:
+        raise HTTPException(
+            status_code=423,
+            detail="Can't write to the template — it may be open in Excel. Close it and retry.",
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Interval generation failed")
+        raise HTTPException(status_code=500, detail=f"Interval generation failed: {e}")
+    return IntervalResponse(**result)
 
 
 def _template_to_dict(t: Template) -> dict:
@@ -156,11 +197,15 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     def on_review(msg):
         logger.info("[review]   %s", msg)
 
+    # Use the well name for the output filename if provided (engine output_path).
+    output_path = _output_path_for(req.working_dir, req.well_name)
+
     try:
         output_path = build_automation_report(
             word_template_path=template.file_path,
             excel_data_path=req.excel_path,
             working_dir=req.working_dir,
+            output_path=output_path,
             progress=on_progress,
             review=on_review,
         )
@@ -178,10 +223,28 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     return GenerateResponse(
         run_id=run.id,
         template_id=template.id,
+        well_name=req.well_name,
         status=run.status,
         output_path=output_path,
         filename=os.path.basename(output_path),
     )
+
+
+def _safe_filename(name: str) -> str:
+    """Make a filesystem-safe stem from a well name."""
+    s = re.sub(r"[^A-Za-z0-9._ -]", "_", name).strip().strip(".")
+    return s
+
+
+def _output_path_for(working_dir: str, well_name):
+    """Build an output .docx path from the well name, or None to let the engine
+    use its timestamped default."""
+    if not well_name:
+        return None
+    stem = _safe_filename(well_name)
+    if not stem:
+        return None
+    return os.path.join(working_dir, f"{stem}_report.docx")
 
 
 @app.post("/api/preview/{run_id}", response_model=PreviewResponse)
@@ -224,6 +287,7 @@ def _record_run(db: Session, template_id: int, req: GenerateRequest,
                 output_path, status: str) -> ReportRun:
     run = ReportRun(
         template_id=template_id,
+        well_name=req.well_name,
         excel_path=req.excel_path,
         working_dir=req.working_dir,
         output_docx_path=output_path,

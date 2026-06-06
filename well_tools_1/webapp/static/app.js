@@ -1,14 +1,33 @@
 // Vanilla ES module frontend — no framework, no build step.
+// Three views: mode select -> inputs -> workspace (form + preview).
 
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  damage: $("damageSelect"),
-  template: $("templateSelect"),
+  // mode
+  modeReport: $("modeReport"),
+  modeInterval: $("modeInterval"),
+  // interval generator
+  pickXml: $("pickXml"),
+  xmlPath: $("xmlPath"),
+  pickTemplate: $("pickTemplate"),
+  templatePath: $("templatePath"),
+  intervalGenerate: $("intervalGenerate"),
+  intervalStatus: $("intervalStatus"),
+  intervalPreview: $("intervalPreview"),
+  // inputs
   pickExcel: $("pickExcel"),
   excelPath: $("excelPath"),
-  pickFolder: $("pickFolder"),
-  folderPath: $("folderPath"),
+  workingDirInput: $("workingDirInput"),
+  browseFolder: $("browseFolder"),
+  toWorkspace: $("toWorkspace"),
+  inputsStatus: $("inputsStatus"),
+  // workspace
+  inputsSummary: $("inputsSummary"),
+  wellName: $("wellName"),
+  config: $("configSelect"),
+  reportType: $("reportType"),
+  templateHint: $("templateHint"),
   generate: $("generate"),
   status: $("status"),
   previewPanel: $("previewPanel"),
@@ -18,64 +37,77 @@ const els = {
 
 const state = {
   templates: [],
+  templatesLoaded: false,
   excelPath: null,
-  workingDir: null,
 };
 
+const ivState = { xmlPath: null, templatePath: null };
+
 // --- pywebview bridge -------------------------------------------------------
-// window.pywebview.api is injected by the desktop shell. In a plain browser it
-// won't exist, so the native pickers are unavailable there.
 function pyapi() {
   return window.pywebview && window.pywebview.api ? window.pywebview.api : null;
 }
 
+// --- View navigation --------------------------------------------------------
+const VIEWS = ["mode", "interval", "inputs", "workspace"];
+function showView(name) {
+  for (const v of VIEWS) {
+    const el = document.getElementById(`view-${v}`);
+    if (el) el.hidden = v !== name;
+  }
+}
+
 // --- Template registry ------------------------------------------------------
-async function loadTemplates() {
+async function ensureTemplates() {
+  if (state.templatesLoaded) return;
   const res = await fetch("/api/templates");
   if (!res.ok) throw new Error(`Failed to load templates (HTTP ${res.status})`);
   state.templates = await res.json();
-  populateDamageOptions();
+  state.templatesLoaded = true;
+  populateConfigOptions();
 }
 
-function populateDamageOptions() {
-  const counts = [...new Set(state.templates.map((t) => t.damage_count))].sort(
-    (a, b) => a - b
+function populateConfigOptions() {
+  const configs = [...new Set(state.templates.map((t) => t.config_key))].sort();
+  els.config.innerHTML = "";
+  for (const c of configs) {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    els.config.appendChild(opt);
+  }
+  refreshTemplateHint();
+}
+
+function resolveTemplate() {
+  const configKey = els.config.value;
+  const damage = Number(els.reportType.value);
+  return (
+    state.templates.find(
+      (t) => t.config_key === configKey && t.damage_count === damage
+    ) || null
   );
-  els.damage.innerHTML = "";
-  for (const c of counts) {
-    const opt = document.createElement("option");
-    opt.value = String(c);
-    opt.textContent = `${c} joints`;
-    els.damage.appendChild(opt);
-  }
-  populateTemplateOptions();
 }
 
-function populateTemplateOptions() {
-  const dc = Number(els.damage.value);
-  const matches = state.templates.filter((t) => t.damage_count === dc);
-  els.template.innerHTML = "";
-  for (const t of matches) {
-    const opt = document.createElement("option");
-    opt.value = String(t.id);
-    opt.textContent = `${t.config_key} — ${t.name}`;
-    els.template.appendChild(opt);
+function refreshTemplateHint() {
+  const t = resolveTemplate();
+  if (t) {
+    els.templateHint.textContent = `Template: ${t.name}`;
+    els.templateHint.classList.remove("hint-warn");
+    els.generate.disabled = false;
+  } else {
+    els.templateHint.textContent =
+      "No template exists for this configuration + report type.";
+    els.templateHint.classList.add("hint-warn");
+    els.generate.disabled = true;
   }
 }
 
-function selectedTemplateId() {
-  const v = els.template.value;
-  return v ? Number(v) : null;
-}
-
-// --- Pickers ----------------------------------------------------------------
+// --- Inputs view ------------------------------------------------------------
 async function pickExcel() {
   const api = pyapi();
-  if (!api) return showError("Native file dialogs are only available in the desktop app.");
-  const path = await api.pick_file([
-    "Excel files (*.xlsx;*.xlsm)",
-    "All files (*.*)",
-  ]);
+  if (!api) return inputsError("Native file dialogs are only available in the desktop app.");
+  const path = await api.pick_file(["Excel files (*.xlsx;*.xlsm)", "All files (*.*)"]);
   if (path) {
     state.excelPath = path;
     els.excelPath.textContent = path;
@@ -83,23 +115,41 @@ async function pickExcel() {
   }
 }
 
-async function pickFolder() {
+async function browseFolder() {
   const api = pyapi();
-  if (!api) return showError("Native folder dialogs are only available in the desktop app.");
+  if (!api) return inputsError("Native folder dialogs are only available in the desktop app.");
   const path = await api.pick_folder();
-  if (path) {
-    state.workingDir = path;
-    els.folderPath.textContent = path;
-    els.folderPath.classList.remove("muted");
+  if (path) els.workingDirInput.value = path;
+}
+
+async function toWorkspace() {
+  const workingDir = els.workingDirInput.value.trim();
+  if (!state.excelPath) return inputsError("Please choose an Excel data file.");
+  if (!workingDir) return inputsError("Please provide a working directory.");
+
+  hide(els.inputsStatus);
+  try {
+    await ensureTemplates();
+  } catch (err) {
+    return inputsError(err.message || String(err));
   }
+  els.inputsSummary.textContent = `Excel: ${basename(state.excelPath)}  •  Folder: ${workingDir}`;
+  showView("workspace");
+}
+
+function inputsError(msg) {
+  els.inputsStatus.hidden = false;
+  els.inputsStatus.className = "status error";
+  els.inputsStatus.innerHTML = `<strong>Error:</strong> ${escapeHtml(msg)}`;
 }
 
 // --- Generate ---------------------------------------------------------------
 async function generate() {
-  const templateId = selectedTemplateId();
-  if (!templateId) return showError("Please choose a template.");
-  if (!state.excelPath) return showError("Please choose an Excel data file.");
-  if (!state.workingDir) return showError("Please choose a working directory.");
+  const template = resolveTemplate();
+  if (!template) return showError("No template exists for this configuration + report type.");
+  const workingDir = els.workingDirInput.value.trim();
+  if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
+  if (!workingDir) return showError("Working directory is missing — go back and set one.");
 
   setLoading(true);
   showInfo("Generating report…");
@@ -109,21 +159,18 @@ async function generate() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        template_id: templateId,
+        template_id: template.id,
         excel_path: state.excelPath,
-        working_dir: state.workingDir,
+        working_dir: workingDir,
+        well_name: els.wellName.value.trim() || null,
       }),
     });
 
     const data = await res.json().catch(() => ({}));
-
     if (!res.ok) {
-      // FastAPI returns { detail: "..." } for HTTPException.
-      const detail = data && data.detail ? data.detail : `HTTP ${res.status}`;
-      showError(detail);
+      showError(data && data.detail ? data.detail : `HTTP ${res.status}`);
       return;
     }
-
     showSuccess(data);
   } catch (err) {
     showError(`Request failed: ${err.message || err}`);
@@ -134,36 +181,7 @@ async function generate() {
 
 async function reveal(path) {
   const api = pyapi();
-  if (!api) return;
-  await api.reveal_file(path);
-}
-
-// --- Status rendering -------------------------------------------------------
-function showStatus(kind, html) {
-  els.status.hidden = false;
-  els.status.className = `status ${kind}`;
-  els.status.innerHTML = html;
-}
-
-function showInfo(msg) {
-  showStatus("info", `<span class="spinner"></span> ${escapeHtml(msg)}`);
-}
-
-function showError(msg) {
-  showStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
-}
-
-function showSuccess(data) {
-  showStatus(
-    "success",
-    `<strong>Report created</strong>
-     <div class="result-path">${escapeHtml(data.output_path)}</div>
-     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>`
-  );
-  const btn = $("revealBtn");
-  if (btn) btn.addEventListener("click", () => reveal(data.output_path));
-  // Automatically render the PDF preview (not live; after generation).
-  requestPreview(data.run_id);
+  if (api) await api.reveal_file(path);
 }
 
 // --- Preview ----------------------------------------------------------------
@@ -190,8 +208,7 @@ async function requestPreview(runId) {
 }
 
 function renderPreview(data) {
-  els.previewMeta.textContent =
-    `${data.page_count} page${data.page_count === 1 ? "" : "s"}`;
+  els.previewMeta.textContent = `${data.page_count} page${data.page_count === 1 ? "" : "s"}`;
   els.previewBody.innerHTML = "";
   data.pages.forEach((src, i) => {
     const img = document.createElement("img");
@@ -202,24 +219,144 @@ function renderPreview(data) {
   });
 }
 
+// --- Status rendering -------------------------------------------------------
+function showStatus(kind, html) {
+  els.status.hidden = false;
+  els.status.className = `status ${kind}`;
+  els.status.innerHTML = html;
+}
+function showInfo(msg) {
+  showStatus("info", `<span class="spinner"></span> ${escapeHtml(msg)}`);
+}
+function showError(msg) {
+  showStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
+}
+function showSuccess(data) {
+  showStatus(
+    "success",
+    `<strong>Report created</strong>
+     <div class="result-path">${escapeHtml(data.output_path)}</div>
+     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>`
+  );
+  const btn = $("revealBtn");
+  if (btn) btn.addEventListener("click", () => reveal(data.output_path));
+  requestPreview(data.run_id);
+}
+
 function setLoading(loading) {
-  els.generate.disabled = loading;
-  els.pickExcel.disabled = loading;
-  els.pickFolder.disabled = loading;
+  els.generate.disabled = loading || !resolveTemplate();
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 
+// --- Interval Generator -----------------------------------------------------
+async function pickXml() {
+  const api = pyapi();
+  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
+  const p = await api.pick_file(["XML files (*.xml)", "All files (*.*)"]);
+  if (p) {
+    ivState.xmlPath = p;
+    els.xmlPath.textContent = p;
+    els.xmlPath.classList.remove("muted");
+  }
+}
+
+async function pickTemplate() {
+  const api = pyapi();
+  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
+  const p = await api.pick_file(["Excel files (*.xlsx;*.xlsm)", "All files (*.*)"]);
+  if (p) {
+    ivState.templatePath = p;
+    els.templatePath.textContent = p;
+    els.templatePath.classList.remove("muted");
+  }
+}
+
+async function intervalGenerate() {
+  if (!ivState.xmlPath) return intervalError("Please choose a WellSchematic XML file.");
+  if (!ivState.templatePath) return intervalError("Please choose an Excel template.");
+
+  setIntervalLoading(true);
+  intervalStatus("info", `<span class="spinner"></span> Generating Raw Data…`);
+  els.intervalPreview.hidden = true;
+
+  try {
+    const res = await fetch("/api/interval/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        xml_path: ivState.xmlPath,
+        template_path: ivState.templatePath,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      intervalError(data && data.detail ? data.detail : `HTTP ${res.status}`);
+      return;
+    }
+    intervalSuccess(data);
+  } catch (err) {
+    intervalError(`Request failed: ${err.message || err}`);
+  } finally {
+    setIntervalLoading(false);
+  }
+}
+
+function intervalSuccess(data) {
+  const types = Object.entries(data.pipe_types)
+    .map(([k, v]) => `${v} ${k}`)
+    .join(", ");
+  intervalStatus(
+    "success",
+    `<strong>Raw Data updated in place</strong>
+     <div class="result-path">${escapeHtml(data.template_path)}</div>
+     <div class="iv-summary">${data.num_pipes} pipes (${escapeHtml(types)}) • ${data.num_intervals} intervals • ${data.depth_min.toFixed(0)}–${data.depth_max.toFixed(0)} ft<br>${escapeHtml(data.thickness_note)}</div>
+     <button id="ivRevealBtn" type="button" class="secondary">Reveal in file manager</button>`
+  );
+  const btn = $("ivRevealBtn");
+  if (btn) btn.addEventListener("click", () => reveal(data.template_path));
+  els.intervalPreview.hidden = false;
+  els.intervalPreview.textContent = data.preview;
+}
+
+function intervalStatus(kind, html) {
+  els.intervalStatus.hidden = false;
+  els.intervalStatus.className = `status ${kind}`;
+  els.intervalStatus.innerHTML = html;
+}
+function intervalError(msg) {
+  intervalStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
+}
+function setIntervalLoading(loading) {
+  els.intervalGenerate.disabled = loading;
+  els.pickXml.disabled = loading;
+  els.pickTemplate.disabled = loading;
+  els.intervalGenerate.textContent = loading ? "Working…" : "Generate Raw Data";
+}
+
+// --- Helpers ----------------------------------------------------------------
+function hide(el) { el.hidden = true; }
+function basename(p) { return String(p).split(/[\\/]/).pop(); }
 function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // --- Wire up ----------------------------------------------------------------
-els.damage.addEventListener("change", populateTemplateOptions);
+els.modeReport.addEventListener("click", () => showView("inputs"));
+els.modeInterval.addEventListener("click", () => showView("interval"));
+document.querySelectorAll("[data-nav]").forEach((b) =>
+  b.addEventListener("click", () => showView(b.getAttribute("data-nav")))
+);
+
+els.pickXml.addEventListener("click", pickXml);
+els.pickTemplate.addEventListener("click", pickTemplate);
+els.intervalGenerate.addEventListener("click", intervalGenerate);
+
 els.pickExcel.addEventListener("click", pickExcel);
-els.pickFolder.addEventListener("click", pickFolder);
+els.browseFolder.addEventListener("click", browseFolder);
+els.toWorkspace.addEventListener("click", toWorkspace);
+
+els.config.addEventListener("change", refreshTemplateHint);
+els.reportType.addEventListener("change", refreshTemplateHint);
 els.generate.addEventListener("click", generate);
 
-loadTemplates().catch((err) => showError(err.message || String(err)));
+showView("mode");

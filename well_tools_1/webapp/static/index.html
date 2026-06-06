@@ -3,56 +3,135 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Report Automation</title>
+  <title>Well Tools</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="layout">
-  <main class="card">
-    <header>
-      <h1>Report Automation</h1>
-      <p class="subtitle">Generate a well-integrity report from a template, your Excel data, and a working folder.</p>
-    </header>
 
-    <section class="field">
-      <label for="damageSelect">Damage count</label>
-      <select id="damageSelect"></select>
-    </section>
-
-    <section class="field">
-      <label for="templateSelect">Template</label>
-      <select id="templateSelect"></select>
-    </section>
-
-    <section class="field">
-      <label>Excel data file</label>
-      <div class="picker">
-        <button id="pickExcel" type="button" class="secondary">Choose Excel…</button>
-        <span id="excelPath" class="path muted">No file selected</span>
+  <!-- ===== View 1: Mode selection ===== -->
+  <section id="view-mode" class="view">
+    <div class="mode-wrap">
+      <h1 class="mode-h1">Well Tools</h1>
+      <p class="subtitle center">Choose a tool to get started.</p>
+      <div class="mode-grid">
+        <button type="button" class="mode-card" id="modeReport">
+          <span class="mode-title">Report Automation</span>
+          <span class="mode-desc">Generate a well-integrity report from a template, Excel data, and images.</span>
+        </button>
+        <button type="button" class="mode-card" id="modeInterval">
+          <span class="mode-title">Interval Generator</span>
+          <span class="mode-desc">Build depth-interval tables from WellSchematic XML.</span>
+        </button>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="field">
-      <label>Working directory</label>
-      <div class="picker">
-        <button id="pickFolder" type="button" class="secondary">Choose Folder…</button>
-        <span id="folderPath" class="path muted">No folder selected</span>
-      </div>
-    </section>
+  <!-- ===== View: Interval Generator ===== -->
+  <section id="view-interval" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Interval Generator</h1>
+        <p class="subtitle">Build the “Raw Data” sheet from a WellSchematic XML into your Excel template — updated in place. The rest of the workbook is untouched.</p>
+      </header>
 
-    <button id="generate" type="button" class="primary">Generate Report</button>
+      <section class="field">
+        <label>WellSchematic XML</label>
+        <div class="picker">
+          <button id="pickXml" type="button" class="secondary">Choose XML…</button>
+          <span id="xmlPath" class="path muted">No file selected</span>
+        </div>
+      </section>
 
-    <div id="status" class="status" hidden></div>
-  </main>
+      <section class="field">
+        <label>Excel template</label>
+        <div class="picker">
+          <button id="pickTemplate" type="button" class="secondary">Choose Template…</button>
+          <span id="templatePath" class="path muted">No file selected</span>
+        </div>
+      </section>
 
-  <aside id="previewPanel" class="preview" hidden>
-    <header class="preview-header">
-      <h2>Preview</h2>
-      <span id="previewMeta" class="muted"></span>
-    </header>
-    <div id="previewBody" class="preview-body"></div>
-  </aside>
-  </div>
+      <button id="intervalGenerate" type="button" class="primary">Generate Raw Data</button>
+      <div id="intervalStatus" class="status" hidden></div>
+      <pre id="intervalPreview" class="preview-text" hidden></pre>
+    </main>
+  </section>
+
+  <!-- ===== View 2: Inputs ===== -->
+  <section id="view-inputs" class="view" hidden>
+    <main class="card">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Report Automation</h1>
+        <p class="subtitle">Provide your Excel data and the working directory.</p>
+      </header>
+
+      <section class="field">
+        <label>Excel data file</label>
+        <div class="picker">
+          <button id="pickExcel" type="button" class="secondary">Choose Excel…</button>
+          <span id="excelPath" class="path muted">No file selected</span>
+        </div>
+      </section>
+
+      <section class="field">
+        <label for="workingDirInput">Working directory</label>
+        <div class="picker">
+          <input type="text" id="workingDirInput" class="text-input" placeholder="Paste the folder path…" />
+          <button id="browseFolder" type="button" class="secondary">Browse…</button>
+        </div>
+      </section>
+
+      <button id="toWorkspace" type="button" class="primary">Continue</button>
+      <div id="inputsStatus" class="status" hidden></div>
+    </main>
+  </section>
+
+  <!-- ===== View 3: Workspace (form + preview) ===== -->
+  <section id="view-workspace" class="view" hidden>
+    <div class="layout">
+      <main class="card">
+        <header>
+          <button type="button" class="link-back" data-nav="inputs">← Back</button>
+          <h1>Report Details</h1>
+          <p id="inputsSummary" class="subtitle"></p>
+        </header>
+
+        <section class="field">
+          <label for="wellName">Well name</label>
+          <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
+        </section>
+
+        <section class="field">
+          <label for="configSelect">Configuration</label>
+          <select id="configSelect"></select>
+        </section>
+
+        <section class="field">
+          <label for="reportType">Report type</label>
+          <select id="reportType">
+            <option value="0">Clean</option>
+            <option value="1">1 damage</option>
+            <option value="2">2 damage</option>
+            <option value="3">3 damage</option>
+          </select>
+        </section>
+
+        <p id="templateHint" class="hint"></p>
+
+        <button id="generate" type="button" class="primary">Generate Report</button>
+        <div id="status" class="status" hidden></div>
+      </main>
+
+      <aside id="previewPanel" class="preview" hidden>
+        <header class="preview-header">
+          <h2>Preview</h2>
+          <span id="previewMeta" class="muted"></span>
+        </header>
+        <div id="previewBody" class="preview-body"></div>
+      </aside>
+    </div>
+  </section>
 
   <script type="module" src="/static/app.js"></script>
 </body>

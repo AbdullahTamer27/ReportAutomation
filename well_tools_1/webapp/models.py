@@ -37,6 +37,7 @@ class ReportRun(Base):
 
     id = Column(Integer, primary_key=True)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
+    well_name = Column(String, nullable=True)
     excel_path = Column(String, nullable=False)
     working_dir = Column(String, nullable=False)
     output_docx_path = Column(String, nullable=True)

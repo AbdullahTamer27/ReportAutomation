@@ -23,6 +23,23 @@ def init_db():
     """Create tables if they don't exist. Imports models so they register."""
     from . import models  # noqa: F401  (registers tables on Base)
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+
+def _migrate():
+    """Lightweight additive migrations for SQLite (no Alembic).
+
+    create_all() never ALTERs existing tables, so columns added to a model after
+    a DB already exists must be added here.
+    """
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "report_runs" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("report_runs")}
+        if "well_name" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE report_runs ADD COLUMN well_name VARCHAR"))
 
 
 def get_db():
