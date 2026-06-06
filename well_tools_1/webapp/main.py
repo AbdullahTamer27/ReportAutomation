@@ -45,7 +45,7 @@ from .registry import (  # noqa: E402
     register_template,
     delete_template,
 )
-from .config import TEMPLATES_DIR  # noqa: E402
+from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 from .interval import generate_raw_data, IntervalInputError  # noqa: E402
 
@@ -149,6 +149,9 @@ def index():
 @app.on_event("startup")
 def _startup():
     """Create tables and seed the registry from the manifest."""
+    # On a frozen build, copy bundled templates into the persistent data dir
+    # (%APPDATA%\WellTools) on first run before anything reads the manifest.
+    ensure_user_data()
     init_db()
     db = SessionLocal()
     try:

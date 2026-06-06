@@ -99,28 +99,21 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,         # onefile: bundle all DLLs / binaries into the EXE
+    a.zipfiles,
+    a.datas,            # onefile: bundle static frontend + templates into the EXE
     [],
-    exclude_binaries=True,
     name="WellTools",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,          # UPX can trigger antivirus false-positives; keep off
-    console=False,      # no terminal window — change to True to see server logs
-    icon=None,          # swap in an .ico path to brand the EXE
+    upx=False,            # UPX can trigger antivirus false-positives; keep off
+    runtime_tmpdir=None,  # unpack to the OS temp dir at launch
+    console=False,        # no terminal window — change to True to see server logs
+    icon=None,            # swap in an .ico path to brand the EXE
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name="WellTools",
-    contents_directory=".",   # PyInstaller 6+: flat layout (all DLLs next to
-                              # the EXE, not in _internal/) — fixes "failed to
-                              # load python DLL" on machines where the bootloader
-                              # can't find python3XX.dll inside _internal/.
-)
+# NOTE: one-file build. Output is a single dist/WellTools.exe.
+# (Previous one-dir COLLECT removed.) The exe still requires the Edge WebView2
+# runtime (UI) and Microsoft Word (PDF preview) on the target machine — those
+# are external apps and cannot be embedded into the executable.

@@ -39,36 +39,49 @@ Or run PyInstaller directly:
 pyinstaller --clean --noconfirm WellTools.spec
 ```
 
-Output lands at:
+This is a **one-file** build (`WellTools.spec`). Output is a single
+self-contained executable:
 
 ```
-well_tools_1\dist\WellTools\
-    WellTools.exe           ← the entry point users double-click
-    _internal\              ← all bundled Python + DLLs (don't touch)
-        webapp\
-            static\         ← bundled frontend (HTML/JS/CSS)
-            data\
-                templates\  ← bundled template .docx files + manifest.json
+well_tools_1\dist\WellTools.exe   ← the only file users need
 ```
 
-**Distribute the entire `dist\WellTools\` folder** — the EXE alone won't run.
+The frontend, bundled templates, Python runtime, and all DLLs are packed inside
+the EXE. At launch it unpacks to a temp folder (so first start takes ~2–3 s).
 
-Before zipping, add the two one-time installers to the folder:
+**Distribute just `WellTools.exe`.** On a Windows 11 machine with Microsoft
+Office, that single file is all you need.
+
+For *clean* machines that may lack the runtimes, ship these alongside it (all in
+one folder) so the one-time installer can run:
 
 ```
-dist\WellTools\
-    WellTools.exe
-    INSTALL.bat                    ← run once on new machines
-    vc_redist.x64.exe              ← download from https://aka.ms/vs/17/release/vc_redist.x64.exe
-    MicrosoftEdgeWebview2Setup.exe ← download from https://developer.microsoft.com/microsoft-edge/webview2/
-    _internal\
-        ...
+WellTools.exe
+INSTALL.bat                    ← run once on new machines
+vc_redist.x64.exe              ← download from https://aka.ms/vs/17/release/vc_redist.x64.exe
+MicrosoftEdgeWebview2Setup.exe ← download from https://developer.microsoft.com/microsoft-edge/webview2/
 ```
 
 Then zip: `WellTools_v1.0.zip`
 
 **On any new machine:** unzip → run `INSTALL.bat` once → done.
-After that, double-click `WellTools.exe` directly every time.
+After that, double-click `WellTools.exe` directly every time. (On Win11 + Office
+you can skip `INSTALL.bat` and just run the EXE.)
+
+### Where the app stores its data
+
+Because this is a one-file build (the EXE's temp folder is wiped on exit), all
+**writable** data lives in a permanent per-user location:
+
+```
+%APPDATA%\WellTools\
+    app.db          ← report-run history
+    templates\      ← seeded from the bundle on first run; Template Manager writes here
+    outputs\        ← PDF-preview cache
+```
+
+Rebuilding and replacing `WellTools.exe` therefore **no longer wipes** the
+database or any user-added templates — they persist in `%APPDATA%`.
 
 ---
 
@@ -76,7 +89,7 @@ After that, double-click `WellTools.exe` directly every time.
 
 1. Unzip `WellTools_v1.0.zip` anywhere (e.g. `C:\WellTools\`).
 2. Double-click `WellTools.exe`.
-3. The first launch creates `_internal\webapp\data\app.db` and seeds the template registry from the bundled `manifest.json`. This takes 2–3 seconds.
+3. The first launch creates `%APPDATA%\WellTools\app.db` and seeds the template registry from the bundled `manifest.json` (copying the bundled templates into `%APPDATA%\WellTools\templates\`). This takes 2–3 seconds.
 4. The Well Tools window opens. Verify:
    - The **home screen** shows three mode cards.
    - **Template Manager** lists the bundled templates.
@@ -108,15 +121,15 @@ Rebuild and rerun — the terminal prints Uvicorn logs and Python tracebacks.
 
 ## Adding templates without rebuilding
 
-Use the **Template Manager** inside the app:
-1. Copy your new `.docx` to `_internal\webapp\data\templates\`.
-2. Open the app → **Template Manager** → **Register a new template**.
-3. The dropdown updates immediately; `manifest.json` is rewritten automatically.
+Use the **Template Manager** inside the app — point it at any `.docx` and it
+copies the file into `%APPDATA%\WellTools\templates\` for you:
+1. Open the app → **Template Manager** → **Register a new template** → pick the `.docx`.
+2. The dropdown updates immediately; `manifest.json` is rewritten automatically.
 
-> **Note:** If the user replaces the `WellTools\` folder with a new build, the
-> `_internal\webapp\data\` folder (DB + any user-added templates) is overwritten.
-> Phase 6 will move mutable data to an external location (e.g. `%APPDATA%\WellTools\`
-> or a shared network drive via the `TEMPLATES_DIR` env var).
+> **Note:** Writable data (DB + user-added templates) now lives in
+> `%APPDATA%\WellTools\`, **outside** the EXE. Replacing `WellTools.exe` with a
+> new build no longer touches it, so report history and added templates survive
+> upgrades. To start fresh, delete the `%APPDATA%\WellTools\` folder.
 
 ---
 
