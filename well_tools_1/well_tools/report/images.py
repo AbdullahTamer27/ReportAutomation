@@ -113,7 +113,7 @@ def insert_image_gentle(cell, image_path, tag, img_width, max_height,
 def place_report_images(template_path, img_folder, output_path,
                         tag_to_file=None, img_width=DEFAULT_IMG_WIDTH,
                         max_height=DEFAULT_MAX_HEIGHT, progress=None,
-                        border_pt=1, border_color="000000", review=None):
+                        border_pt=0.75, border_color="000000", review=None):
     """Place tagged images from `img_folder` into `template_path`, save to
     `output_path`. Returns {placed, skipped, missing}.
 
