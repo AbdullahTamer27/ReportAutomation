@@ -136,13 +136,23 @@ def read_joints(ws):
 def read_highest(ws, top_n):
     # columns P..Y = 16..25  (P=#, Q..Y = the 10-col block; Z=rank ignored)
     # The block is pre-ranked by severity, so the worst joints sit at the top.
-    # Show at least `top_n` rows, but if there are more than `top_n` joints graded
-    # C (moderate) or D (intensive), extend the table to include all of them.
     rows = read_table_block(ws, list(range(16, 26)), 16)
-    # Grade is column index 8 within each 10-col block.
-    cd_count = sum(1 for v in rows if str(v[8]).strip() in ("C", "D"))
-    n = max(top_n, cd_count)
-    return rows[:n]
+
+    # Drop rows where Max Loss (%) is 0 or negative — not real measurements.
+    # Annotated/excluded rows (non-numeric Max Loss) are kept as-is.
+    valid_rows = [
+        v for v in rows
+        if not isinstance(v[MAX_LOSS_IDX], (int, float)) or v[MAX_LOSS_IDX] > 0
+    ]
+
+    # If fewer valid rows than top_n, show only what's available — no padding.
+    # If more than top_n exist and some are C/D, extend to include all C/D rows.
+    cd_count = sum(
+        1 for v in valid_rows
+        if isinstance(v[MAX_LOSS_IDX], (int, float)) and str(v[GRADE_IDX]).strip() in ("C", "D")
+    )
+    n = max(min(top_n, len(valid_rows)), cd_count)
+    return valid_rows[:n]
 
 
 def is_excluded(vals):

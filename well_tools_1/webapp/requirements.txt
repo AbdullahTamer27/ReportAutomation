@@ -20,4 +20,3 @@ python-docx
 openpyxl
 pandas
 lxml
-new
