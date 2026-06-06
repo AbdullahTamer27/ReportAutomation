@@ -119,4 +119,8 @@ coll = COLLECT(
     upx=False,
     upx_exclude=[],
     name="WellTools",
+    contents_directory=".",   # PyInstaller 6+: flat layout (all DLLs next to
+                              # the EXE, not in _internal/) — fixes "failed to
+                              # load python DLL" on machines where the bootloader
+                              # can't find python3XX.dll inside _internal/.
 )
