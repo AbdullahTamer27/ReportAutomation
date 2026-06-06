@@ -51,11 +51,13 @@ def resolve_image_folder(working_dir):
 
 def build_automation_report(word_template_path, excel_data_path, working_dir,
                             output_path=None, highest_top_n=4, progress=None,
-                            review=None):
+                            review=None, damage_count=0):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
     curated review items (failures, warnings, data-sanity flags) to the UI.
+    `damage_count` is N: the marked damage block in the template is repeated N
+    times (each = 3 images), with N=0 producing no damage pictures.
     """
     def log(msg):
         if progress:
@@ -75,6 +77,11 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         word_template_path, excel_data_path, output_path,
         highest_top_n=highest_top_n, progress=log, review=review,
     )
+
+    # ---- 1.5) Expand damage blocks (N image-sections) on the output ----
+    log(f"Expanding damage sections (N={damage_count})…")
+    from . import damage_blocks
+    damage_blocks.expand_in_file(output_path, damage_count, progress=log, review=review)
 
     # ---- 2) Images: output -> output (in place) ----
     img_folder = resolve_image_folder(working_dir)

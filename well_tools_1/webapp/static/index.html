@@ -11,7 +11,7 @@
   <!-- ===== View 1: Mode selection ===== -->
   <section id="view-mode" class="view">
     <div class="mode-wrap">
-      <h1 class="mode-h1">Well Tools</h1>
+      <h1 class="mode-h1">Welcome back, Analyst</h1>
       <p class="subtitle center">Choose a tool to get started.</p>
       <div class="mode-grid">
         <button type="button" class="mode-card" id="modeReport">
@@ -108,13 +108,8 @@
         </section>
 
         <section class="field">
-          <label for="reportType">Report type</label>
-          <select id="reportType">
-            <option value="0">Clean</option>
-            <option value="1">1 damage</option>
-            <option value="2">2 damage</option>
-            <option value="3">3 damage</option>
-          </select>
+          <label for="damageCount">Number of damages</label>
+          <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
         </section>
 
         <p id="templateHint" class="hint"></p>
@@ -132,6 +127,10 @@
       </aside>
     </div>
   </section>
+
+  <footer class="app-footer">
+    © 2026 Well Tools · Released under the MIT License
+  </footer>
 
   <script type="module" src="/static/app.js"></script>
 </body>

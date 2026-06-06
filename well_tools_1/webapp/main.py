@@ -63,10 +63,11 @@ class TemplateOut(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    template_id: int = Field(..., description="ID of a registered template (see GET /api/templates)")
+    template_id: int = Field(..., description="ID of a registered template (chosen by configuration)")
     excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
     working_dir: str = Field(..., description="Folder holding images (IMGS/ or itself); the report is saved here")
     well_name: str | None = Field(None, description="Well name; used for the output filename and recorded in history")
+    damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
 
 
 class GenerateResponse(BaseModel):
@@ -187,8 +188,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Template id {req.template_id} not found.")
 
     logger.info(
-        "Generate | template_id=%s (%s) | excel=%s | working_dir=%s",
-        template.id, template.name, req.excel_path, req.working_dir,
+        "Generate | template_id=%s (%s) | N=%s | excel=%s | working_dir=%s",
+        template.id, template.name, req.damage_count, req.excel_path, req.working_dir,
     )
 
     def on_progress(msg):
@@ -206,6 +207,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             excel_data_path=req.excel_path,
             working_dir=req.working_dir,
             output_path=output_path,
+            damage_count=req.damage_count,
             progress=on_progress,
             review=on_review,
         )

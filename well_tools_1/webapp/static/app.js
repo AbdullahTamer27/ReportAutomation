@@ -26,7 +26,7 @@ const els = {
   inputsSummary: $("inputsSummary"),
   wellName: $("wellName"),
   config: $("configSelect"),
-  reportType: $("reportType"),
+  damageCount: $("damageCount"),
   templateHint: $("templateHint"),
   generate: $("generate"),
   status: $("status"),
@@ -80,13 +80,9 @@ function populateConfigOptions() {
 }
 
 function resolveTemplate() {
+  // Configuration alone selects the template; damages are independent (N).
   const configKey = els.config.value;
-  const damage = Number(els.reportType.value);
-  return (
-    state.templates.find(
-      (t) => t.config_key === configKey && t.damage_count === damage
-    ) || null
-  );
+  return state.templates.find((t) => t.config_key === configKey) || null;
 }
 
 function refreshTemplateHint() {
@@ -96,11 +92,15 @@ function refreshTemplateHint() {
     els.templateHint.classList.remove("hint-warn");
     els.generate.disabled = false;
   } else {
-    els.templateHint.textContent =
-      "No template exists for this configuration + report type.";
+    els.templateHint.textContent = "No template found for this configuration.";
     els.templateHint.classList.add("hint-warn");
     els.generate.disabled = true;
   }
+}
+
+function damageCountValue() {
+  const n = parseInt(els.damageCount.value, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // --- Inputs view ------------------------------------------------------------
@@ -146,7 +146,7 @@ function inputsError(msg) {
 // --- Generate ---------------------------------------------------------------
 async function generate() {
   const template = resolveTemplate();
-  if (!template) return showError("No template exists for this configuration + report type.");
+  if (!template) return showError("No template found for this configuration.");
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
   if (!workingDir) return showError("Working directory is missing — go back and set one.");
@@ -163,6 +163,7 @@ async function generate() {
         excel_path: state.excelPath,
         working_dir: workingDir,
         well_name: els.wellName.value.trim() || null,
+        damage_count: damageCountValue(),
       }),
     });
 
@@ -356,7 +357,6 @@ els.browseFolder.addEventListener("click", browseFolder);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
 els.config.addEventListener("change", refreshTemplateHint);
-els.reportType.addEventListener("change", refreshTemplateHint);
 els.generate.addEventListener("click", generate);
 
 showView("mode");

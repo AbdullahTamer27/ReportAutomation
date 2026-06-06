@@ -8,6 +8,7 @@ into a callable (`place_report_images`) with `print` routed through a callback.
 """
 
 import os
+import re
 from docx import Document
 from docx.shared import Inches
 from lxml import etree
@@ -19,6 +20,8 @@ DEFAULT_IMG_WIDTH = Inches(6.46)
 # the image is capped to this height instead (width comes out proportional).
 DEFAULT_MAX_HEIGHT = Inches(8.98)
 
+# Static (config-level) image tags. Per-damage images are matched by pattern
+# below, so any number of damage points scales without listing them here.
 TAG_TO_FILE = {
     "{{proc}}":   "proc.jpg",
     "{{tempgr}}": "tempgr.jpg",
@@ -26,13 +29,21 @@ TAG_TO_FILE = {
     "{{raw}}":    "raw.jpg",
     "{{well}}":   "well.jpg",
     "{{ts}}":     "ts.jpg",
-    "{{DMG1_1}}": "DMG1_1.jpeg",
-    "{{DMG1_2}}": "DMG1_2.jpeg",
-    "{{DMG1_3}}": "DMG1_3.jpeg",
-    "{{DMG2_1}}": "DMG2_1.jpeg",
-    "{{DMG2_2}}": "DMG2_2.jpeg",
-    "{{DMG2_3}}": "DMG2_3.jpeg",
 }
+
+# Per-damage image tags: {{DMG<i>_<j>}} -> file "DMG<i>_<j>.<ext>".
+DMG_TAG = re.compile(r"^\{\{DMG(\d+)_(\d+)\}\}$")
+
+
+def _filename_for_tag(tag, tag_to_file):
+    """Resolve a placeholder tag to a base filename (without forcing an
+    extension). Static tags come from the dict; {{DMGi_j}} is pattern-matched."""
+    if tag in tag_to_file:
+        return tag_to_file[tag]
+    m = DMG_TAG.match(tag)
+    if m:
+        return f"DMG{m.group(1)}_{m.group(2)}"
+    return None
 
 
 # Image extensions to accept, regardless of what's written in TAG_TO_FILE.
@@ -131,8 +142,8 @@ def place_report_images(template_path, img_folder, output_path,
         if len(table.rows) == 1 and len(table.columns) == 1:
             cell = table.rows[0].cells[0]
             tag = cell.text.strip()
-            if tag in tag_to_file:
-                fname = tag_to_file[tag]
+            fname = _filename_for_tag(tag, tag_to_file)
+            if fname:
                 image_path = _resolve_image_path(img_folder, fname)
                 if image_path:
                     try:
