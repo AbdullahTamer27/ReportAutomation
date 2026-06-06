@@ -1,2 +1,25 @@
+# Project-specific large/source files
 HRDH_1702*
 improvements*
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# PyInstaller build artifacts
+build/
+dist/
+
+# App-generated runtime data (recreated on first run)
+well_tools_1/webapp/data/app.db
+well_tools_1/webapp/data/outputs/
+
+# OS cruft
+.DS_Store
