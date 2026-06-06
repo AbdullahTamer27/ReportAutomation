@@ -24,6 +24,70 @@ from docx.shared import RGBColor, Pt
 GRADE_COLORS = {"A": "FFFF00", "B": "FFC000", "C": "0070C0", "D": "FF0000"}
 ROUND = {1: 1, 2: 1, 3: 1, 4: 3, 5: 3, 6: 1, 7: 1}
 
+# Column layout (0-based) within each 10-col data block.
+COLUMN_NAMES = [
+    "#", "Top Body (ft)", "Bottom Body (ft)", "Body Length (ft)",
+    "Nom Thk (in)", "Min Thk (in)", "Max Loss Depth (ft)",
+    "Max Loss (%)", "Grade", "Damage Profile (% wall loss)",
+]
+JOINT_NO_IDX = 0
+BODY_LEN_IDX = 3
+MAX_LOSS_IDX = 7
+GRADE_IDX = 8
+
+# Valid joint (body) length range, in feet. Outside this gets flagged.
+BODY_LEN_MIN = 28.0
+BODY_LEN_MAX = 45.0
+
+
+def grade_for_loss(loss):
+    """Grade from Max Loss (%): 0–4.9 A, 5–9.9 B, 10–19.9 C, 20+ D."""
+    if loss < 5:
+        return "A"
+    if loss < 10:
+        return "B"
+    if loss < 20:
+        return "C"
+    return "D"
+
+
+def _joint_label(vals):
+    jn = vals[JOINT_NO_IDX]
+    if isinstance(jn, float) and jn.is_integer():
+        jn = int(jn)
+    return jn
+
+
+def review_row(table_name, vals, review):
+    """Sanity-check one real (non-excluded) data row. Corrects vals[GRADE_IDX]
+    in place when it disagrees with Max Loss (%). Emits messages via review(msg)."""
+    if review is None:
+        return
+    jn = _joint_label(vals)
+
+    # Any negative number in the row.
+    for i, v in enumerate(vals):
+        if isinstance(v, (int, float)) and v < 0:
+            review(f"⚠ {table_name} joint {jn}: negative {COLUMN_NAMES[i]} ({v})")
+
+    # Joint (body) length out of range — only when it actually has a value.
+    bl = vals[BODY_LEN_IDX]
+    if isinstance(bl, (int, float)) and not (BODY_LEN_MIN <= bl <= BODY_LEN_MAX):
+        review(f"⚠ {table_name} joint {jn}: Body Length {bl:.1f} ft out of range "
+               f"({BODY_LEN_MIN:.0f}–{BODY_LEN_MAX:.0f})")
+
+    # Grade vs Max Loss (%) — correct the grade, never the value.
+    loss = vals[MAX_LOSS_IDX]
+    if isinstance(loss, (int, float)) and loss >= 0:
+        if loss > 100:
+            review(f"⚠ {table_name} joint {jn}: Max Loss {loss:.1f}% exceeds 100%")
+        correct = grade_for_loss(loss)
+        current = str(vals[GRADE_IDX]).strip().upper()
+        if current != correct:
+            review(f"✎ {table_name} joint {jn}: grade {current or '—'}→{correct} "
+                   f"(Max Loss {loss:.1f}%) — corrected")
+            vals[GRADE_IDX] = correct
+
 JOINTS_TAG = re.compile(r"\{\{joints_(\w+)\}\}")
 HIGHEST_TAG = re.compile(r"\{\{highest_(\w+)\}\}")
 
@@ -131,8 +195,9 @@ def clone_row(table, template_row):
     return table.rows[-1]
 
 
-def fill_table(table, data_rows):
-    """Fill a tagged table with data_rows using the cloned-style-row approach."""
+def fill_table(table, data_rows, table_name=None, review=None):
+    """Fill a tagged table with data_rows using the cloned-style-row approach.
+    Real data rows are sanity-checked (and grade-corrected) via review_row."""
     template_row = table.rows[1]   # the single styled data row
     for vals in data_rows:
         new_row = clone_row(table, template_row)
@@ -149,6 +214,8 @@ def fill_table(table, data_rows):
             run = para.add_run(str(vals[5]))
             run.font.name = "Calibri"; run.font.size = Pt(10)
         else:
+            # Review + correct grade before writing the cells.
+            review_row(table_name, vals, review)
             for i in range(10):
                 set_cell_text(cells[i], fmt(vals[i], i))
             grade = str(vals[8]).strip()
@@ -167,10 +234,14 @@ def delete_table(table):
 
 # ---------------- Orchestration ----------------
 def fill_report_tables(template_path, workbook_path, output_path,
-                       highest_top_n=HIGHEST_TOP_N, progress=None):
+                       highest_top_n=HIGHEST_TOP_N, progress=None, review=None):
     """Fill all tagged tables in `template_path` from `workbook_path` and save to
-    `output_path`. Returns a result dict: {filled, deleted, used, warnings}."""
+    `output_path`. Returns a result dict: {filled, deleted, used, warnings}.
+
+    `progress(msg)` streams verbose status; `review(msg)` streams only the
+    curated review items (failures, warnings, data-sanity flags)."""
     log = progress or print
+    rev = review or (lambda m: None)
 
     wb = openpyxl.load_workbook(workbook_path, data_only=True)
     sheets = set(wb.sheetnames)
@@ -193,39 +264,46 @@ def fill_report_tables(template_path, workbook_path, output_path,
 
         if mj:
             sheet_name = mj.group(1)
+            tag = f"joints_{sheet_name}"
             if sheet_name in sheets:
-                rows = read_joints(wb[sheet_name])
-                fill_table(table, rows)
-                set_cell_text(table.rows[0].cells[0], "#")  # restore header
-                used.add(sheet_name)
-                filled += 1
-                log(f"OK joints_{sheet_name}: {len(rows)} rows")
+                try:
+                    rows = read_joints(wb[sheet_name])
+                    fill_table(table, rows, table_name=tag, review=rev)
+                    set_cell_text(table.rows[0].cells[0], "#")  # restore header
+                    used.add(sheet_name)
+                    filled += 1
+                    log(f"OK {tag}: {len(rows)} rows")
+                except Exception as e:  # noqa: BLE001
+                    rev(f"❌ {tag}: failed to fill table — {e}")
             else:
                 delete_table(table)
                 deleted += 1
-                log(f"DEL joints_{sheet_name}: sheet not found -> table deleted")
+                rev(f"⚠ {tag}: sheet not found in workbook → table removed")
 
         elif mh:
             sheet_name = mh.group(1)
+            tag = f"highest_{sheet_name}"
             if sheet_name in sheets:
-                rows = read_highest(wb[sheet_name], highest_top_n)
-                fill_table(table, rows)
-                set_cell_text(table.rows[0].cells[0], "#")
-                filled += 1
-                log(f"OK highest_{sheet_name}: {len(rows)} rows")
+                try:
+                    rows = read_highest(wb[sheet_name], highest_top_n)
+                    fill_table(table, rows, table_name=tag, review=rev)
+                    set_cell_text(table.rows[0].cells[0], "#")
+                    filled += 1
+                    log(f"OK {tag}: {len(rows)} rows")
+                except Exception as e:  # noqa: BLE001
+                    rev(f"❌ {tag}: failed to fill table — {e}")
             else:
                 delete_table(table)
                 deleted += 1
-                log(f"DEL highest_{sheet_name}: sheet not found -> table deleted")
+                rev(f"⚠ {tag}: sheet not found in workbook → table removed")
 
     # Validation: pipe sheets that exist but were never filled by any tag
     pipe_sheets = {s for s in sheets if s.endswith("Pipe")}
     for s in pipe_sheets - used:
         warnings.append(f"sheet '{s}' has no matching tag in template")
+        rev(f"⚠ Sheet '{s}' exists but has no matching tag in the template")
 
     doc.save(output_path)
     log(f"Tables: filled {filled}, deleted {deleted}. Saved -> {output_path}")
-    for w in warnings:
-        log("WARNING: " + w)
 
     return {"filled": filled, "deleted": deleted, "used": used, "warnings": warnings}

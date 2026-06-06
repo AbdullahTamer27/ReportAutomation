@@ -65,8 +65,8 @@ class ReportTab:
         ttk.Button(dir_frame, text="Choose Working Directory",
                    command=self.choose_working_dir).pack(pady=5)
 
-        # Preview / log
-        preview_frame = ttk.LabelFrame(self.container, text="Status / Preview")
+        # Review panel — only important items show here (problems & data flags)
+        preview_frame = ttk.LabelFrame(self.container, text="Review")
         preview_frame.pack(fill="both", expand=True, padx=10, pady=5)
         self.preview = tk.Text(preview_frame, height=12, wrap="word", font=("Courier", 9))
         self.preview.pack(fill="both", expand=True)
@@ -176,6 +176,11 @@ class ReportTab:
         self.preview.see(tk.END)
         self.preview.update_idletasks()
 
+    def _review(self, msg):
+        """A curated review item from the engine — these are what the panel shows."""
+        self._review_count += 1
+        self._log(msg)
+
     def generate_report(self):
         try:
             from ..report.report_builder import validate_inputs
@@ -186,7 +191,8 @@ class ReportTab:
 
         self.preview.delete("1.0", tk.END)
         self.generate_btn.config(state="disabled")
-        self._log("===== GENERATING REPORT =====")
+        self._review_count = 0
+        self._log("===== REVIEW =====")
 
         # Run off the UI thread so the window stays responsive on large data.
         def worker():
@@ -195,7 +201,7 @@ class ReportTab:
                     self.word_template_path,
                     self.excel_data_path,
                     self.working_dir,
-                    progress=lambda m: self.container.after(0, self._log, m),
+                    review=lambda m: self.container.after(0, self._review, m),
                 )
                 self.container.after(0, self._on_success, out)
             except ReportInputError as e:
@@ -211,6 +217,8 @@ class ReportTab:
 
     def _on_success(self, out_path):
         self.generate_btn.config(state="normal")
+        if self._review_count == 0:
+            self._log("No issues found ✓")
         self._log(f"\n✅ Report saved:\n{out_path}")
         messagebox.showinfo("Success", f"Report created:\n{os.path.basename(out_path)}")
 

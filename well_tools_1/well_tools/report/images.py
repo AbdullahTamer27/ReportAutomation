@@ -35,6 +35,31 @@ TAG_TO_FILE = {
 }
 
 
+# Image extensions to accept, regardless of what's written in TAG_TO_FILE.
+SUPPORTED_EXTS = (".png", ".jpg", ".jpeg", ".tiff", ".tif")
+
+
+def _resolve_image_path(img_folder, fname):
+    """Find the image for `fname` in `img_folder`, accepting any supported
+    extension. Tries the configured name first, then the same base name with
+    each supported extension (case-insensitive). Returns a path or None."""
+    exact = os.path.join(img_folder, fname)
+    if os.path.exists(exact):
+        return exact
+    stem = os.path.splitext(fname)[0]
+    # Case-insensitive scan of the folder so e.g. PROC.JPG matches proc.jpg.
+    try:
+        entries = os.listdir(img_folder)
+    except OSError:
+        entries = []
+    by_lower = {e.lower(): e for e in entries}
+    for ext in SUPPORTED_EXTS:
+        hit = by_lower.get((stem + ext).lower())
+        if hit:
+            return os.path.join(img_folder, hit)
+    return None
+
+
 # ---------------- Border helper ----------------
 _NSMAP = {
     "a":   "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -78,7 +103,9 @@ def insert_image_gentle(cell, image_path, tag, img_width, max_height,
     else:
         sized_by = "width"
     if border_pt > 0:
-        _add_image_border(pic._inline._pic, width_pt=border_pt, color=border_color)
+        # pic._inline is the CT_Inline (<wp:inline>) element; the border helper
+        # finds the descendant <pic:spPr> from it.
+        _add_image_border(pic._inline, width_pt=border_pt, color=border_color)
     return sized_by
 
 
@@ -86,10 +113,14 @@ def insert_image_gentle(cell, image_path, tag, img_width, max_height,
 def place_report_images(template_path, img_folder, output_path,
                         tag_to_file=None, img_width=DEFAULT_IMG_WIDTH,
                         max_height=DEFAULT_MAX_HEIGHT, progress=None,
-                        border_pt=1, border_color="000000"):
+                        border_pt=1, border_color="000000", review=None):
     """Place tagged images from `img_folder` into `template_path`, save to
-    `output_path`. Returns {placed, skipped, missing}."""
+    `output_path`. Returns {placed, skipped, missing}.
+
+    `progress(msg)` streams verbose status; `review(msg)` streams only the
+    curated review items (images not placed + reason, and a final summary)."""
     log = progress or print
+    rev = review or (lambda m: None)
     if tag_to_file is None:
         tag_to_file = TAG_TO_FILE
 
@@ -101,17 +132,27 @@ def place_report_images(template_path, img_folder, output_path,
             cell = table.rows[0].cells[0]
             tag = cell.text.strip()
             if tag in tag_to_file:
-                image_path = os.path.join(img_folder, tag_to_file[tag])
-                if os.path.exists(image_path):
-                    how = insert_image_gentle(cell, image_path, tag, img_width, max_height,
-                                             border_pt=border_pt, border_color=border_color)
-                    log(f"OK placed {tag_to_file[tag]} into {tag} (by {how})")
-                    placed += 1
+                fname = tag_to_file[tag]
+                image_path = _resolve_image_path(img_folder, fname)
+                if image_path:
+                    try:
+                        how = insert_image_gentle(cell, image_path, tag, img_width, max_height,
+                                                 border_pt=border_pt, border_color=border_color)
+                        log(f"OK placed {os.path.basename(image_path)} into {tag} (by {how})")
+                        placed += 1
+                    except Exception as e:  # noqa: BLE001
+                        rev(f"❌ {tag}: image not placed — {os.path.basename(image_path)}: {e}")
+                        missing.append(os.path.basename(image_path))
+                        skipped += 1
                 else:
-                    log(f"SKIP {tag}: file not found -> {image_path}")
-                    missing.append(tag_to_file[tag])
+                    stem = os.path.splitext(fname)[0]
+                    exts = "/".join(e.lstrip(".") for e in SUPPORTED_EXTS)
+                    rev(f"❌ {tag}: image not placed — no file '{stem}.[{exts}]' in folder")
+                    missing.append(fname)
                     skipped += 1
 
     doc.save(output_path)
+    rev(f"Images — placed {placed}, skipped {skipped}"
+        + (f" (missing: {', '.join(missing)})" if missing else ""))
     log(f"Images: placed {placed}, skipped {skipped}. Saved -> {output_path}")
     return {"placed": placed, "skipped": skipped, "missing": missing}

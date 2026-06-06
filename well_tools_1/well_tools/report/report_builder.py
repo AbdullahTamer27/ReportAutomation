@@ -50,10 +50,12 @@ def resolve_image_folder(working_dir):
 
 
 def build_automation_report(word_template_path, excel_data_path, working_dir,
-                            output_path=None, highest_top_n=4, progress=None):
+                            output_path=None, highest_top_n=4, progress=None,
+                            review=None):
     """Build the report and return the output .docx path.
 
-    `progress(msg)` is an optional callback used to stream status to the UI.
+    `progress(msg)` streams verbose status; `review(msg)` streams only the
+    curated review items (failures, warnings, data-sanity flags) to the UI.
     """
     def log(msg):
         if progress:
@@ -71,14 +73,15 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     from . import tables
     tables.fill_report_tables(
         word_template_path, excel_data_path, output_path,
-        highest_top_n=highest_top_n, progress=log,
+        highest_top_n=highest_top_n, progress=log, review=review,
     )
 
     # ---- 2) Images: output -> output (in place) ----
     img_folder = resolve_image_folder(working_dir)
     log(f"Placing images from: {img_folder}")
     from . import images
-    images.place_report_images(output_path, img_folder, output_path, progress=log)
+    images.place_report_images(output_path, img_folder, output_path,
+                               progress=log, review=review)
 
     log(f"Done → {output_path}")
     return output_path
