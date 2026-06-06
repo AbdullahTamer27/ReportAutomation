@@ -1,0 +1,4 @@
+pandas
+openpyxl
+python-docx
+tkinterdnd2   ; optional — drag & drop. App works without it (buttons only).
