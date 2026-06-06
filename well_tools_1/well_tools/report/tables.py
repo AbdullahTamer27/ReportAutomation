@@ -146,7 +146,24 @@ def read_highest(ws, top_n):
 
 
 def is_excluded(vals):
-    return not isinstance(vals[5], (int, float))
+    """An annotated joint: the Max Loss (%) column holds a text note instead of a
+    number (or reads blank because the cells were merged in Excel). Either way the
+    measurement columns are merged into one note cell in the Word table."""
+    return not isinstance(vals[MAX_LOSS_IDX], (int, float))
+
+
+def annotation_text(vals):
+    """The note shown in an annotated joint's merged cell. Prefer the Max Loss (%)
+    column (where it lives when Excel isn't merged); fall back to the first text
+    found across the merged span (where it lives when Excel is already merged)."""
+    note = vals[MAX_LOSS_IDX]
+    if isinstance(note, str) and note.strip():
+        return note.strip()
+    for i in range(5, 10):
+        v = vals[i]
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
 
 
 def fmt(val, idx):
@@ -223,13 +240,16 @@ def fill_table(table, data_rows, table_name=None, review=None):
         for c in cells:
             reset_cell(c)
         if is_excluded(vals):
+            # Annotated joint: keep the geometry columns (0–4), merge the
+            # measurement columns (5–9) into one cell and show the note. This
+            # merge is done here in Word whether or not the Excel was merged.
             for i in range(5):
                 set_cell_text(cells[i], fmt(vals[i], i))
             merged = cells[5]
             for i in range(6, 10):
                 merged = merged.merge(cells[i])
             para = clear_cell_paragraphs(merged)
-            run = para.add_run(str(vals[5]))
+            run = para.add_run(annotation_text(vals))
             run.font.name = "Calibri"; run.font.size = Pt(10)
         else:
             # Review + correct grade before writing the cells.
