@@ -6,6 +6,10 @@
 #
 # Output: dist/WellTools/WellTools.exe  (+ _internal/ with all dependencies)
 
+import os
+import sys
+import glob
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # Collect pywebview and PyMuPDF fully — they embed DLLs / data that
@@ -13,12 +17,23 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 wv_data,  wv_bins,  wv_hidden  = collect_all("webview")
 fitz_data, fitz_bins, fitz_hidden = collect_all("fitz")
 
+# pywin32 system DLLs (pythoncom3X.dll, pywintypes3X.dll) must be in the
+# bundle root so Windows COM infrastructure can find them at run-time.
+# Without this, docx2pdf silently fails when launched from the frozen EXE.
+_pywin32_sysdir = os.path.join(
+    sys.prefix, "Lib", "site-packages", "pywin32_system32"
+)
+_pywin32_dlls = [
+    (dll, ".")                        # place DLLs at the _internal/ root
+    for dll in glob.glob(os.path.join(_pywin32_sysdir, "*.dll"))
+]
+
 block_cipher = None
 
 a = Analysis(
     ["webapp/app.py"],
     pathex=["."],                    # well_tools_1/ — finds both packages
-    binaries=wv_bins + fitz_bins,
+    binaries=wv_bins + fitz_bins + _pywin32_dlls,
     datas=[
         # Static frontend served by FastAPI
         ("webapp/static",           "webapp/static"),
@@ -67,7 +82,7 @@ a = Analysis(
     ),
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=["rthook_pywin32.py"],
     excludes=[
         "tkinter", "_tkinter",      # desktop Tkinter UI — not used by the web app
         "matplotlib", "scipy",

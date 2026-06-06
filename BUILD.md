@@ -14,8 +14,9 @@
 | Requirement | Notes |
 |---|---|
 | **No Python required** | The EXE bundles everything |
-| **Microsoft Word** | Required for the PDF preview feature. Without it the `.docx` still generates cleanly; only the preview panel shows "unavailable" |
-| **Edge WebView2 runtime** | Ships pre-installed on Windows 11 and most up-to-date Windows 10 machines. If the window opens but shows blank, install from: https://developer.microsoft.com/en-us/microsoft-edge/webview2/ |
+| **Visual C++ Runtime** | Required by the EXE itself. Missing on truly clean machines → "failed to load python DLL" error. Fixed by running `INSTALL.bat` once (see below) |
+| **Edge WebView2 runtime** | Required for the app window. Pre-installed on Windows 11; may be missing on clean Windows 10. Fixed by `INSTALL.bat` |
+| **Microsoft Word** | Required only for PDF preview. Without it the `.docx` still generates; only the preview panel shows "unavailable" |
 
 ---
 
@@ -51,7 +52,23 @@ well_tools_1\dist\WellTools\
 ```
 
 **Distribute the entire `dist\WellTools\` folder** — the EXE alone won't run.
-Zip it for distribution: `WellTools_v1.0.zip`.
+
+Before zipping, add the two one-time installers to the folder:
+
+```
+dist\WellTools\
+    WellTools.exe
+    INSTALL.bat                    ← run once on new machines
+    vc_redist.x64.exe              ← download from https://aka.ms/vs/17/release/vc_redist.x64.exe
+    MicrosoftEdgeWebview2Setup.exe ← download from https://developer.microsoft.com/microsoft-edge/webview2/
+    _internal\
+        ...
+```
+
+Then zip: `WellTools_v1.0.zip`
+
+**On any new machine:** unzip → run `INSTALL.bat` once → done.
+After that, double-click `WellTools.exe` directly every time.
 
 ---
 
