@@ -31,6 +31,19 @@ class Template(Base):
     )
 
 
+class Company(Base):
+    """A registered company and its logo, keyed uniquely by name. The logo is
+    placed into the {{COMP}} body table and header pictures at report time."""
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+    logo_path = Column(String, nullable=False)          # absolute path on disk
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
+
+
 class ReportRun(Base):
     """One report-generation attempt and its result."""
     __tablename__ = "report_runs"

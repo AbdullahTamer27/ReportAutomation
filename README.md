@@ -120,6 +120,10 @@ The report builder takes three inputs:
 | `{{joints_<sheet>}}`    | Fills a full joints table from columns A–J of `<sheet>`.           |
 | `{{highest_<sheet>}}`   | Fills the highest-metal-loss table (top joints + all C/D joints).  |
 | `{{proc}}`, `{{wh}}`, … | Image placeholders, mapped to files in the working/IMGS folder.    |
+| `{{DISC}}`              | First cell of a disclaimer table. If "Include disclaimer" is checked the tag is removed and the table is kept; otherwise the whole table is deleted. |
+| `{{COMP}}`              | Company logo. Place it in a borderless 1×1 table (body) **and** set it as the **Alt Text** of the logo picture in each section header (Word → right-click image → Alt Text → Description). The logo chosen in the Company Manager fills the body table and replaces every header picture tagged this way. |
+
+> **Company logos** are managed in the **Company Manager** (name + logo image), not the IMGS folder, and choosing one is required to generate a report.
 
 ---
 

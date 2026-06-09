@@ -26,6 +26,10 @@
           <span class="mode-title">Template Manager</span>
           <span class="mode-desc">Register, update, or remove report templates without restarting.</span>
         </button>
+        <button type="button" class="mode-card" id="modeCompanies">
+          <span class="mode-title">Company Manager</span>
+          <span class="mode-desc">Add or remove company logos used in the report header and body.</span>
+        </button>
       </div>
     </div>
   </section>
@@ -70,6 +74,44 @@
       <div class="tm-list-box">
         <h3 class="tm-section-title">Registered templates</h3>
         <div id="tmList" class="tm-list"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===== View: Company Manager ===== -->
+  <section id="view-companies" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Company Manager</h1>
+        <p class="subtitle">Add or remove company logos. The selected company's logo is placed in the report header and the {{COMP}} body table.</p>
+      </header>
+
+      <!-- Add form -->
+      <div class="tm-add-box">
+        <h3 class="tm-section-title">Register a new company</h3>
+
+        <div class="field">
+          <label>Logo image (.png, .jpg, …)</label>
+          <div class="picker">
+            <button id="cmPickFile" type="button" class="secondary">Choose image…</button>
+            <span id="cmFilePath" class="path muted">No file selected</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="cmName">Company name</label>
+          <input type="text" id="cmName" class="text-input" placeholder="e.g. Saudi Aramco" />
+        </div>
+
+        <button id="cmRegister" type="button" class="primary" style="margin-top:4px">Register Company</button>
+        <div id="cmStatus" class="status" hidden></div>
+      </div>
+
+      <!-- Current companies list -->
+      <div class="tm-list-box">
+        <h3 class="tm-section-title">Registered companies</h3>
+        <div id="cmList" class="tm-list"></div>
       </div>
     </main>
   </section>
@@ -156,11 +198,24 @@
         </section>
 
         <section class="field">
+          <label for="companySelect">Company</label>
+          <select id="companySelect"></select>
+        </section>
+
+        <section class="field">
           <label for="damageCount">Number of damages</label>
           <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
         </section>
 
+        <section class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="includeDisclaimer" />
+            <span>Include disclaimer</span>
+          </label>
+        </section>
+
         <p id="templateHint" class="hint"></p>
+        <p id="companyHint" class="hint"></p>
 
         <button id="generate" type="button" class="primary">Generate Report</button>
         <div id="status" class="status" hidden></div>

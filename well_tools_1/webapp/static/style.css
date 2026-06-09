@@ -335,6 +335,25 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .hint-warn { color: var(--error-fg); font-weight: 600; }
 
+/* ===== Checkbox row ===== */
+.checkbox-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  text-transform: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #4f8cff);
+  cursor: pointer;
+}
+
 /* ===== Template manager ===== */
 .tm-add-box {
   background: rgba(255,255,255,0.03);

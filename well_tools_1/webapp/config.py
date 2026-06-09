@@ -44,7 +44,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
 # .docx files here and rewrites manifest.json).
 TEMPLATES_DIR = os.environ.get("TEMPLATES_DIR", os.path.join(DATA_DIR, "templates"))
 
-# Registry file inside TEMPLATES_DIR.
+# Company logos directory — managed like templates (a folder + manifest.json,
+# editable from the Company Manager UI).
+COMPANIES_DIR = os.environ.get("COMPANIES_DIR", os.path.join(DATA_DIR, "companies"))
+
+# Registry file inside TEMPLATES_DIR / COMPANIES_DIR.
 MANIFEST_NAME = "manifest.json"
 
 # --- Read-only bundled paths -------------------------------------------------
@@ -52,8 +56,10 @@ MANIFEST_NAME = "manifest.json"
 # this points at the same folder as TEMPLATES_DIR, so seeding is a no-op.
 if _FROZEN:
     BUNDLED_TEMPLATES_DIR = os.path.join(BUNDLE_DIR, "webapp", "data", "templates")
+    BUNDLED_COMPANIES_DIR = os.path.join(BUNDLE_DIR, "webapp", "data", "companies")
 else:
     BUNDLED_TEMPLATES_DIR = os.path.join(HERE, "data", "templates")
+    BUNDLED_COMPANIES_DIR = os.path.join(HERE, "data", "companies")
 
 
 def ensure_user_data():
@@ -66,20 +72,22 @@ def ensure_user_data():
 
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(TEMPLATES_DIR, exist_ok=True)
+    os.makedirs(COMPANIES_DIR, exist_ok=True)
 
-    # Dev mode (or a custom TEMPLATES_DIR that already is the bundle): nothing to copy.
-    if os.path.abspath(BUNDLED_TEMPLATES_DIR) == os.path.abspath(TEMPLATES_DIR):
-        return
+    def _seed(bundled_dir, user_dir):
+        # Dev mode (or a custom dir that already is the bundle): nothing to copy.
+        if os.path.abspath(bundled_dir) == os.path.abspath(user_dir):
+            return
+        # Already seeded — leave the user's files untouched.
+        if os.path.exists(os.path.join(user_dir, MANIFEST_NAME)):
+            return
+        if not os.path.isdir(bundled_dir):
+            return
+        for entry in os.listdir(bundled_dir):
+            src = os.path.join(bundled_dir, entry)
+            dst = os.path.join(user_dir, entry)
+            if os.path.isfile(src) and not os.path.exists(dst):
+                shutil.copy2(src, dst)
 
-    # Already seeded — leave the user's templates untouched.
-    if os.path.exists(os.path.join(TEMPLATES_DIR, MANIFEST_NAME)):
-        return
-
-    if not os.path.isdir(BUNDLED_TEMPLATES_DIR):
-        return
-
-    for entry in os.listdir(BUNDLED_TEMPLATES_DIR):
-        src = os.path.join(BUNDLED_TEMPLATES_DIR, entry)
-        dst = os.path.join(TEMPLATES_DIR, entry)
-        if os.path.isfile(src) and not os.path.exists(dst):
-            shutil.copy2(src, dst)
+    _seed(BUNDLED_TEMPLATES_DIR, TEMPLATES_DIR)
+    _seed(BUNDLED_COMPANIES_DIR, COMPANIES_DIR)

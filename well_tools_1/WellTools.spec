@@ -39,6 +39,8 @@ a = Analysis(
         ("webapp/static",           "webapp/static"),
         # Bundled template folder (manifest.json + .docx files)
         ("webapp/data/templates",   "webapp/data/templates"),
+        # Bundled company-logos folder (manifest.json + logo images)
+        ("webapp/data/companies",   "webapp/data/companies"),
     ] + wv_data + fitz_data,
     hiddenimports=(
         wv_hidden + fitz_hidden

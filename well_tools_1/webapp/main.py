@@ -39,11 +39,14 @@ from well_tools.report.report_builder import (  # noqa: E402
 )
 
 from .db import init_db, get_db, SessionLocal  # noqa: E402
-from .models import Template, ReportRun  # noqa: E402
+from .models import Template, ReportRun, Company  # noqa: E402
 from .registry import (  # noqa: E402
     seed_templates_from_manifest,
     register_template,
     delete_template,
+    seed_companies_from_manifest,
+    register_company,
+    delete_company,
 )
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
@@ -75,6 +78,8 @@ class GenerateRequest(BaseModel):
     working_dir: str = Field(..., description="Folder holding images (IMGS/ or itself); the report is saved here")
     well_name: str | None = Field(None, description="Well name; used for the output filename and recorded in history")
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
+    company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
+    include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
 
 
 class GenerateResponse(BaseModel):
@@ -104,6 +109,26 @@ class TemplateRegisterResponse(BaseModel):
     name: str
     config_key: str
     file_path: str
+    created: bool   # True = new, False = updated existing
+
+
+class CompanyOut(BaseModel):
+    id: int
+    name: str
+    logo_path: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CompanyRegisterRequest(BaseModel):
+    file_path: str = Field(..., description="Absolute path to the logo image (from native picker)")
+    name: str = Field(..., description="Company name shown in the dropdown")
+
+
+class CompanyRegisterResponse(BaseModel):
+    id: int
+    name: str
+    logo_path: str
     created: bool   # True = new, False = updated existing
 
 
@@ -157,6 +182,7 @@ def _startup():
     try:
         logger.info("Templates dir: %s", TEMPLATES_DIR)
         seed_templates_from_manifest(db)
+        seed_companies_from_manifest(db)
     finally:
         db.close()
 
@@ -250,6 +276,59 @@ def template_delete(template_id: int, db: Session = Depends(get_db)):
     return {"ok": True, "deleted_id": template_id}
 
 
+def _company_to_dict(c: Company) -> dict:
+    return {
+        "id": c.id,
+        "name": c.name,
+        "logo_path": c.logo_path,
+        "created_at": c.created_at,
+        "updated_at": c.updated_at,
+    }
+
+
+@app.get("/api/companies", response_model=list[CompanyOut])
+def list_companies(db: Session = Depends(get_db)):
+    """Registry rows for populating the company dropdown."""
+    rows = db.query(Company).order_by(Company.name).all()
+    return [_company_to_dict(c) for c in rows]
+
+
+@app.post("/api/companies/register", response_model=CompanyRegisterResponse)
+def company_register(req: CompanyRegisterRequest, db: Session = Depends(get_db)):
+    """Copy a logo image into the companies directory and register it.
+    If a company with the same name already exists it is updated."""
+    req.name = req.name.strip()
+    if not req.name:
+        raise HTTPException(status_code=400, detail="Company name is required.")
+
+    existing_before = db.query(Company).filter_by(name=req.name).one_or_none()
+    try:
+        c = register_company(db, req.name, req.file_path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Company registration failed")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {e}")
+
+    return CompanyRegisterResponse(
+        id=c.id,
+        name=c.name,
+        logo_path=c.logo_path,
+        created=existing_before is None,
+    )
+
+
+@app.delete("/api/companies/{company_id}")
+def company_delete(company_id: int, db: Session = Depends(get_db)):
+    """Remove a company from the registry and delete its logo file from disk."""
+    found = delete_company(db, company_id, remove_file=True)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Company {company_id} not found.")
+    return {"ok": True, "deleted_id": company_id}
+
+
 @app.post("/api/report/generate", response_model=GenerateResponse)
 def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     """Generate a report from a registered template, and record the run.
@@ -262,9 +341,19 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     if template is None:
         raise HTTPException(status_code=404, detail=f"Template id {req.template_id} not found.")
 
+    company = db.get(Company, req.company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"Company id {req.company_id} not found.")
+    if not company.logo_path or not os.path.isfile(company.logo_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Logo file for company '{company.name}' is missing on disk.",
+        )
+
     logger.info(
-        "Generate | template_id=%s (%s) | N=%s | excel=%s | working_dir=%s",
-        template.id, template.name, req.damage_count, req.excel_path, req.working_dir,
+        "Generate | template_id=%s (%s) | company=%s | N=%s | disc=%s | excel=%s | working_dir=%s",
+        template.id, template.name, company.name, req.damage_count,
+        req.include_disclaimer, req.excel_path, req.working_dir,
     )
 
     def on_progress(msg):
@@ -283,6 +372,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             working_dir=req.working_dir,
             output_path=output_path,
             damage_count=req.damage_count,
+            include_disclaimer=req.include_disclaimer,
+            company_logo_path=company.logo_path,
             progress=on_progress,
             review=on_review,
         )

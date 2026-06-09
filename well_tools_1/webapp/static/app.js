@@ -8,6 +8,7 @@ const els = {
   modeReport: $("modeReport"),
   modeInterval: $("modeInterval"),
   modeTemplates: $("modeTemplates"),
+  modeCompanies: $("modeCompanies"),
   // template manager
   tmPickFile: $("tmPickFile"),
   tmFilePath: $("tmFilePath"),
@@ -16,6 +17,13 @@ const els = {
   tmRegister: $("tmRegister"),
   tmStatus: $("tmStatus"),
   tmList: $("tmList"),
+  // company manager
+  cmPickFile: $("cmPickFile"),
+  cmFilePath: $("cmFilePath"),
+  cmName: $("cmName"),
+  cmRegister: $("cmRegister"),
+  cmStatus: $("cmStatus"),
+  cmList: $("cmList"),
   // interval generator
   pickXml: $("pickXml"),
   xmlPath: $("xmlPath"),
@@ -35,8 +43,11 @@ const els = {
   inputsSummary: $("inputsSummary"),
   wellName: $("wellName"),
   config: $("configSelect"),
+  company: $("companySelect"),
   damageCount: $("damageCount"),
+  includeDisclaimer: $("includeDisclaimer"),
   templateHint: $("templateHint"),
+  companyHint: $("companyHint"),
   generate: $("generate"),
   status: $("status"),
   previewPanel: $("previewPanel"),
@@ -47,11 +58,14 @@ const els = {
 const state = {
   templates: [],
   templatesLoaded: false,
+  companies: [],
+  companiesLoaded: false,
   excelPath: null,
 };
 
 const ivState = { xmlPath: null, templatePath: null };
 const tmState = { filePath: null };
+const cmState = { filePath: null };
 
 // --- pywebview bridge -------------------------------------------------------
 function pyapi() {
@@ -59,13 +73,14 @@ function pyapi() {
 }
 
 // --- View navigation --------------------------------------------------------
-const VIEWS = ["mode", "interval", "inputs", "workspace", "templates"];
+const VIEWS = ["mode", "interval", "inputs", "workspace", "templates", "companies"];
 function showView(name) {
   for (const v of VIEWS) {
     const el = document.getElementById(`view-${v}`);
     if (el) el.hidden = v !== name;
   }
   if (name === "templates") tmLoadList();
+  if (name === "companies") cmLoadList();
 }
 
 // --- Template registry ------------------------------------------------------
@@ -76,6 +91,47 @@ async function ensureTemplates() {
   state.templates = await res.json();
   state.templatesLoaded = true;
   populateConfigOptions();
+}
+
+async function ensureCompanies() {
+  if (state.companiesLoaded) return;
+  const res = await fetch("/api/companies");
+  if (!res.ok) throw new Error(`Failed to load companies (HTTP ${res.status})`);
+  state.companies = await res.json();
+  state.companiesLoaded = true;
+  populateCompanyOptions();
+}
+
+function populateCompanyOptions() {
+  els.company.innerHTML = "";
+  for (const c of state.companies) {
+    const opt = document.createElement("option");
+    opt.value = String(c.id);
+    opt.textContent = c.name;
+    els.company.appendChild(opt);
+  }
+  refreshCompanyHint();
+}
+
+function resolveCompany() {
+  const id = parseInt(els.company.value, 10);
+  return state.companies.find((c) => c.id === id) || null;
+}
+
+function refreshCompanyHint() {
+  if (!state.companies.length) {
+    els.companyHint.textContent =
+      "No companies registered — add one in the Company Manager before generating.";
+    els.companyHint.classList.add("hint-warn");
+  } else {
+    els.companyHint.textContent = "";
+    els.companyHint.classList.remove("hint-warn");
+  }
+  updateGenerateEnabled();
+}
+
+function updateGenerateEnabled() {
+  els.generate.disabled = !(resolveTemplate() && resolveCompany());
 }
 
 function populateConfigOptions() {
@@ -101,12 +157,11 @@ function refreshTemplateHint() {
   if (t) {
     els.templateHint.textContent = `Template: ${t.name}`;
     els.templateHint.classList.remove("hint-warn");
-    els.generate.disabled = false;
   } else {
     els.templateHint.textContent = "No template found for this configuration.";
     els.templateHint.classList.add("hint-warn");
-    els.generate.disabled = true;
   }
+  updateGenerateEnabled();
 }
 
 function damageCountValue() {
@@ -141,6 +196,7 @@ async function toWorkspace() {
   hide(els.inputsStatus);
   try {
     await ensureTemplates();
+    await ensureCompanies();
   } catch (err) {
     return inputsError(err.message || String(err));
   }
@@ -158,6 +214,8 @@ function inputsError(msg) {
 async function generate() {
   const template = resolveTemplate();
   if (!template) return showError("No template found for this configuration.");
+  const company = resolveCompany();
+  if (!company) return showError("Please choose a company (or add one in the Company Manager).");
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
   if (!workingDir) return showError("Working directory is missing — go back and set one.");
@@ -175,6 +233,8 @@ async function generate() {
         working_dir: workingDir,
         well_name: els.wellName.value.trim() || null,
         damage_count: damageCountValue(),
+        company_id: company.id,
+        include_disclaimer: els.includeDisclaimer.checked,
       }),
     });
 
@@ -256,7 +316,7 @@ function showSuccess(data) {
 }
 
 function setLoading(loading) {
-  els.generate.disabled = loading || !resolveTemplate();
+  els.generate.disabled = loading || !resolveTemplate() || !resolveCompany();
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 
@@ -376,6 +436,115 @@ function tmShowStatus(kind, msg) {
   els.tmStatus.innerHTML = escapeHtml(msg);
 }
 
+// --- Company Manager --------------------------------------------------------
+async function cmPickFile() {
+  const api = pyapi();
+  if (!api) return cmShowStatus("error", "Native file dialogs are only available in the desktop app.");
+  const p = await api.pick_file([
+    "Image files (*.png;*.jpg;*.jpeg;*.tiff;*.tif;*.bmp;*.gif)",
+    "All files (*.*)",
+  ]);
+  if (p) {
+    cmState.filePath = p;
+    els.cmFilePath.textContent = p;
+    els.cmFilePath.classList.remove("muted");
+    // Auto-fill the name from the filename if empty.
+    if (!els.cmName.value.trim()) {
+      els.cmName.value = p.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+    }
+  }
+}
+
+async function cmRegister() {
+  const name = els.cmName.value.trim();
+  if (!cmState.filePath) return cmShowStatus("error", "Please choose a logo image.");
+  if (!name) return cmShowStatus("error", "Please enter a company name.");
+
+  els.cmRegister.disabled = true;
+  els.cmRegister.textContent = "Registering…";
+  hide(els.cmStatus);
+
+  try {
+    const res = await fetch("/api/companies/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: cmState.filePath, name }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      cmShowStatus("error", data.detail || `HTTP ${res.status}`);
+      return;
+    }
+    const verb = data.created ? "registered" : "updated";
+    cmShowStatus("success", `✓ Company "${escapeHtml(data.name)}" ${verb}`);
+    els.cmName.value = "";
+    els.cmFilePath.textContent = "No file selected";
+    els.cmFilePath.classList.add("muted");
+    cmState.filePath = null;
+    // Refresh list + invalidate report dropdown cache.
+    state.companiesLoaded = false;
+    await cmLoadList();
+  } catch (err) {
+    cmShowStatus("error", `Request failed: ${err.message || err}`);
+  } finally {
+    els.cmRegister.disabled = false;
+    els.cmRegister.textContent = "Register Company";
+  }
+}
+
+async function cmDelete(id, name) {
+  if (!confirm(`Remove "${name}"?\n\nThe logo file is deleted from disk.`)) return;
+  try {
+    const res = await fetch(`/api/companies/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      cmShowStatus("error", data.detail || `HTTP ${res.status}`);
+      return;
+    }
+    state.companiesLoaded = false;
+    await cmLoadList();
+  } catch (err) {
+    cmShowStatus("error", `Delete failed: ${err.message || err}`);
+  }
+}
+
+async function cmLoadList() {
+  els.cmList.innerHTML = `<p class="tm-empty">Loading…</p>`;
+  try {
+    const res = await fetch("/api/companies");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    if (!rows.length) {
+      els.cmList.innerHTML = `<p class="tm-empty">No companies registered yet.</p>`;
+      return;
+    }
+    els.cmList.innerHTML = "";
+    rows.forEach((c) => {
+      const row = document.createElement("div");
+      row.className = "tm-row-item";
+      row.innerHTML = `
+        <div class="tm-info">
+          <span class="tm-name">${escapeHtml(c.name)}</span>
+          <span class="tm-key">${escapeHtml(basename(c.logo_path))}</span>
+        </div>
+        <button class="secondary tm-del-btn" data-id="${c.id}" data-name="${escapeHtml(c.name)}">Remove</button>`;
+      row.querySelector(".tm-del-btn").addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        cmDelete(Number(btn.dataset.id), btn.dataset.name);
+      });
+      els.cmList.appendChild(row);
+    });
+  } catch (err) {
+    els.cmList.innerHTML = `<p class="tm-empty" style="color:var(--error-fg)">Failed to load: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function cmShowStatus(kind, msg) {
+  els.cmStatus.hidden = false;
+  els.cmStatus.className = `status ${kind}`;
+  els.cmStatus.innerHTML = escapeHtml(msg);
+}
+
 // --- Interval Generator -----------------------------------------------------
 async function pickXml() {
   const api = pyapi();
@@ -472,9 +641,13 @@ function escapeHtml(s) {
 els.modeReport.addEventListener("click", () => showView("inputs"));
 els.modeInterval.addEventListener("click", () => showView("interval"));
 els.modeTemplates.addEventListener("click", () => showView("templates"));
+els.modeCompanies.addEventListener("click", () => showView("companies"));
 
 els.tmPickFile.addEventListener("click", tmPickFile);
 els.tmRegister.addEventListener("click", tmRegister);
+
+els.cmPickFile.addEventListener("click", cmPickFile);
+els.cmRegister.addEventListener("click", cmRegister);
 document.querySelectorAll("[data-nav]").forEach((b) =>
   b.addEventListener("click", () => showView(b.getAttribute("data-nav")))
 );
@@ -488,6 +661,7 @@ els.browseFolder.addEventListener("click", browseFolder);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
 els.config.addEventListener("change", refreshTemplateHint);
+els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 
 showView("mode");
