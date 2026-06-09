@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Well Tools</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ===== View 1: Mode selection ===== -->
+  <section id="view-mode" class="view">
+    <div class="mode-wrap">
+      <h1 class="mode-h1">Welcome back, Analyst</h1>
+      <p class="subtitle center">Choose a tool to get started.</p>
+      <div class="mode-grid">
+        <button type="button" class="mode-card" id="modeReport">
+          <span class="mode-title">Report Automation</span>
+          <span class="mode-desc">Generate a well-integrity report from a template, Excel data, and images.</span>
+        </button>
+        <button type="button" class="mode-card" id="modeInterval">
+          <span class="mode-title">Interval Generator</span>
+          <span class="mode-desc">Build depth-interval tables from WellSchematic XML.</span>
+        </button>
+        <button type="button" class="mode-card" id="modeGhost">
+          <span class="mode-title">Ghost Merger</span>
+          <span class="mode-desc">Merge ghost-collar intervals in a SmartLog Joint-Analysis CSV into a clean Excel.</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== View: Template Manager ===== -->
+  <section id="view-templates" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="inputs">← Back</button>
+        <h1>Template Manager</h1>
+        <p class="subtitle">Add or remove report templates. Changes take effect immediately — no restart needed.</p>
+      </header>
+
+      <!-- Add form -->
+      <div class="tm-add-box">
+        <h3 class="tm-section-title">Register a new template</h3>
+
+        <div class="field">
+          <label>Template file (.docx)</label>
+          <div class="picker">
+            <button id="tmPickFile" type="button" class="secondary">Choose .docx…</button>
+            <span id="tmFilePath" class="path muted">No file selected</span>
+          </div>
+        </div>
+
+        <div class="tm-row">
+          <div class="field" style="flex:1">
+            <label for="tmName">Display name</label>
+            <input type="text" id="tmName" class="text-input" placeholder="e.g. 4.5 – 7 – 9 – 13" />
+          </div>
+          <div class="field" style="flex:1">
+            <label for="tmConfigKey">Configuration key</label>
+            <input type="text" id="tmConfigKey" class="text-input" placeholder="e.g. 4.5-7-9-13" />
+          </div>
+        </div>
+
+        <button id="tmRegister" type="button" class="primary" style="margin-top:4px">Register Template</button>
+        <div id="tmStatus" class="status" hidden></div>
+      </div>
+
+      <!-- Current templates list -->
+      <div class="tm-list-box">
+        <h3 class="tm-section-title">Registered templates</h3>
+        <div id="tmList" class="tm-list"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===== View: Company Manager ===== -->
+  <section id="view-companies" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="inputs">← Back</button>
+        <h1>Company Manager</h1>
+        <p class="subtitle">Add or remove company logos. The selected company's logo is placed in the report header and the {{COMP}} body table.</p>
+      </header>
+
+      <!-- Add form -->
+      <div class="tm-add-box">
+        <h3 class="tm-section-title">Register a new company</h3>
+
+        <div class="field">
+          <label>Logo image (.png, .jpg, …)</label>
+          <div class="picker">
+            <button id="cmPickFile" type="button" class="secondary">Choose image…</button>
+            <span id="cmFilePath" class="path muted">No file selected</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="cmName">Company name</label>
+          <input type="text" id="cmName" class="text-input" placeholder="e.g. Saudi Aramco" />
+        </div>
+
+        <button id="cmRegister" type="button" class="primary" style="margin-top:4px">Register Company</button>
+        <div id="cmStatus" class="status" hidden></div>
+      </div>
+
+      <!-- Current companies list -->
+      <div class="tm-list-box">
+        <h3 class="tm-section-title">Registered companies</h3>
+        <div id="cmList" class="tm-list"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===== View: Interval Generator ===== -->
+  <section id="view-interval" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Interval Generator</h1>
+        <p class="subtitle">Build the “Raw Data” sheet from a WellSchematic XML into your Excel template — updated in place. The rest of the workbook is untouched.</p>
+      </header>
+
+      <section class="field">
+        <label>WellSchematic XML</label>
+        <div class="picker">
+          <button id="pickXml" type="button" class="secondary">Choose XML…</button>
+          <span id="xmlPath" class="path muted">No file selected</span>
+        </div>
+      </section>
+
+      <section class="field">
+        <label>Excel template</label>
+        <div class="picker">
+          <button id="pickTemplate" type="button" class="secondary">Choose Template…</button>
+          <span id="templatePath" class="path muted">No file selected</span>
+        </div>
+      </section>
+
+      <button id="intervalGenerate" type="button" class="primary">Generate Raw Data</button>
+      <div id="intervalStatus" class="status" hidden></div>
+      <pre id="intervalPreview" class="preview-text" hidden></pre>
+    </main>
+  </section>
+
+  <!-- ===== View: Ghost Merger ===== -->
+  <section id="view-ghost" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Ghost Merger 👻</h1>
+        <p class="subtitle">Merge consecutive joints separated by a “ghost collar” gap in a SmartLog Joint-Analysis CSV. The cleaned result is saved as an Excel file next to the CSV.</p>
+      </header>
+
+      <section class="field">
+        <label for="ghostLength">Ghost collar length (ft) — merge collars ≥</label>
+        <input type="number" id="ghostLength" class="text-input" min="0" step="0.1" value="3" />
+      </section>
+
+      <section class="field">
+        <label>Joint-Analysis CSV</label>
+        <div class="picker">
+          <button id="pickGhostCsv" type="button" class="secondary">Choose CSV…</button>
+          <span id="ghostCsvPath" class="path muted">No file selected</span>
+        </div>
+      </section>
+
+      <button id="ghostMerge" type="button" class="primary">Merge &amp; Export</button>
+      <div id="ghostStatus" class="status" hidden></div>
+      <pre id="ghostPreview" class="preview-text" hidden></pre>
+    </main>
+  </section>
+
+  <!-- ===== View 2: Inputs ===== -->
+  <section id="view-inputs" class="view" hidden>
+    <div class="layout">
+      <!-- Left half: inputs -->
+      <main class="card card-half">
+        <header>
+          <button type="button" class="link-back" data-nav="mode">← Back</button>
+          <h1>Report Automation</h1>
+          <p class="subtitle">Provide your Excel data and the working directory.</p>
+        </header>
+
+        <section class="field">
+          <label>Excel data file</label>
+          <div class="picker">
+            <button id="pickExcel" type="button" class="secondary">Choose Excel…</button>
+            <span id="excelPath" class="path muted">No file selected</span>
+          </div>
+        </section>
+
+        <section class="field">
+          <label for="workingDirInput">Working directory</label>
+          <div class="picker">
+            <input type="text" id="workingDirInput" class="text-input" placeholder="Paste the folder path…" />
+            <button id="browseFolder" type="button" class="secondary">Browse…</button>
+          </div>
+        </section>
+
+        <button id="toWorkspace" type="button" class="primary">Continue</button>
+        <div id="inputsStatus" class="status" hidden></div>
+      </main>
+
+      <!-- Right half: instructions + sub-feature managers -->
+      <aside class="card card-half">
+        <section class="info-card">
+          <h3 class="info-card-title">📷 Image naming guide</h3>
+          <p class="info-card-sub">
+            Put the photos in an <code>IMGS</code> folder inside your working directory
+            (or directly in the folder itself). Use the exact base name below — any of
+            <code>.png</code> <code>.jpg</code> <code>.jpeg</code> <code>.tif</code>
+            <code>.tiff</code> is accepted.
+          </p>
+          <ul class="img-name-list">
+            <li><code>proc</code><span>Procedure</span></li>
+            <li><code>tempgr</code><span>Temperature gradient</span></li>
+            <li><code>wh</code><span>Wellhead</span></li>
+            <li><code>raw</code><span>Raw data</span></li>
+            <li><code>well</code><span>Well schematic</span></li>
+            <li><code>ts</code><span>Tubing string</span></li>
+          </ul>
+          <p class="info-card-note">
+            <strong>Damage photos</strong> — 3 per damage point, named
+            <code>DMG&lt;n&gt;_1</code>, <code>DMG&lt;n&gt;_2</code>, <code>DMG&lt;n&gt;_3</code>,
+            where <code>&lt;n&gt;</code> is the damage number (1…N from the next screen).
+            e.g. <code>DMG1_1</code>, <code>DMG1_2</code>, <code>DMG1_3</code>, <code>DMG2_1</code>…
+          </p>
+          <p class="info-card-note">
+            The <strong>company logo</strong> is <em>not</em> placed here — pick it from the
+            Company dropdown on the next screen.
+          </p>
+        </section>
+
+        <section class="sub-tools">
+          <h3 class="tm-section-title">Setup</h3>
+          <p class="info-card-sub">Manage the templates and company logos this report uses.</p>
+          <div class="sub-tools-btns">
+            <button id="openTemplates" type="button" class="secondary">🗂️ Template Manager</button>
+            <button id="openCompanies" type="button" class="secondary">🏢 Company Manager</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===== View 3: Workspace (form + preview) ===== -->
+  <section id="view-workspace" class="view" hidden>
+    <div class="layout">
+      <main class="card">
+        <header>
+          <button type="button" class="link-back" data-nav="inputs">← Back</button>
+          <h1>Report Details</h1>
+          <p id="inputsSummary" class="subtitle"></p>
+        </header>
+
+        <section class="field">
+          <label for="wellName">Well name</label>
+          <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
+        </section>
+
+        <div class="field-row">
+          <section class="field">
+            <label for="wellType">Well type</label>
+            <input type="text" id="wellType" class="text-input" placeholder="e.g. Oil producer" />
+          </section>
+          <section class="field">
+            <label for="btmDepth">Bottom depth</label>
+            <input type="text" id="btmDepth" class="text-input" placeholder="e.g. 7233 ft" />
+          </section>
+        </div>
+
+        <div class="field-row">
+          <section class="field">
+            <label for="logDate">Log date</label>
+            <input type="text" id="logDate" class="text-input" placeholder="e.g. 09-Sep-2020" />
+          </section>
+          <section class="field">
+            <label for="origComp">Original completion</label>
+            <input type="text" id="origComp" class="text-input" placeholder="e.g. 26-Apr-1988" />
+          </section>
+        </div>
+
+        <section class="field">
+          <label for="lastWko">Last workover</label>
+          <input type="text" id="lastWko" class="text-input" placeholder="e.g. 03-Mar-2024 (or N/A)" />
+        </section>
+
+        <section class="field">
+          <label for="configSelect">Configuration</label>
+          <select id="configSelect"></select>
+        </section>
+
+        <section class="field">
+          <label for="companySelect">Company</label>
+          <select id="companySelect"></select>
+        </section>
+
+        <section class="field">
+          <label for="damageCount">Number of damages</label>
+          <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
+        </section>
+
+        <section class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="includeDisclaimer" />
+            <span>Include disclaimer</span>
+          </label>
+        </section>
+
+        <p id="templateHint" class="hint"></p>
+        <p id="companyHint" class="hint"></p>
+
+        <button id="generate" type="button" class="primary">Generate Report</button>
+        <div id="status" class="status" hidden></div>
+      </main>
+
+      <aside id="previewPanel" class="preview" hidden>
+        <header class="preview-header">
+          <h2>Preview</h2>
+          <span id="previewMeta" class="muted"></span>
+        </header>
+        <div id="previewBody" class="preview-body"></div>
+      </aside>
+    </div>
+  </section>
+
+  <footer class="app-footer">
+    © 2026 Well Tools · Released under the MIT License
+  </footer>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

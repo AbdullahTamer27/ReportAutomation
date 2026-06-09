@@ -51,11 +51,21 @@ def resolve_image_folder(working_dir):
 
 def build_automation_report(word_template_path, excel_data_path, working_dir,
                             output_path=None, highest_top_n=4, progress=None,
-                            review=None):
+                            review=None, damage_count=0,
+                            include_disclaimer=False, company_logo_path=None,
+                            company_name=None, text_fields=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
     curated review items (failures, warnings, data-sanity flags) to the UI.
+    `damage_count` is N: the marked damage block in the template is repeated N
+    times (each = 3 images), with N=0 producing no damage pictures.
+    `include_disclaimer` keeps the {{DISC}} table (else it is removed).
+    `company_logo_path` is the chosen company's logo: placed into the {{COMP}}
+    body table and swapped into every header picture tagged {{COMP}}.
+    `company_name` replaces the {{COMPNAME}} text tag (footers/body/headers).
+    `text_fields` is a {tag: value} map of plain-text tags to replace anywhere
+    in the document (e.g. {{well_name}}, {{log_date}}, {{orig_comp}}, {{last_wko}}).
     """
     def log(msg):
         if progress:
@@ -76,12 +86,37 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         highest_top_n=highest_top_n, progress=log, review=review,
     )
 
+    # ---- 1.5) Expand damage blocks (N image-sections) on the output ----
+    log(f"Expanding damage sections (N={damage_count})…")
+    from . import damage_blocks
+    damage_blocks.expand_in_file(output_path, damage_count, progress=log, review=review)
+
+    # ---- 1.6) Disclaimer: keep or remove the {{DISC}} table ----
+    log(f"Applying disclaimer choice (include={bool(include_disclaimer)})…")
+    from . import disclaimer
+    disclaimer.apply_in_file(output_path, bool(include_disclaimer),
+                             progress=log, review=review)
+
     # ---- 2) Images: output -> output (in place) ----
     img_folder = resolve_image_folder(working_dir)
     log(f"Placing images from: {img_folder}")
     from . import images
     images.place_report_images(output_path, img_folder, output_path,
                                progress=log, review=review)
+
+    # ---- 2.5) Company logo: body {{COMP}} table + tagged header pictures ----
+    if company_logo_path:
+        log(f"Placing company logo: {company_logo_path}")
+        from . import company
+        company.place_company_logo(output_path, company_logo_path,
+                                   company_name=company_name,
+                                   progress=log, review=review)
+
+    # ---- 2.6) Well-metadata text tags ({{well_name}}, {{log_date}}, …) ----
+    if text_fields:
+        log("Filling well-metadata text tags…")
+        from . import text_fields as tf
+        tf.apply_text_fields(output_path, text_fields, progress=log, review=review)
 
     log(f"Done → {output_path}")
     return output_path

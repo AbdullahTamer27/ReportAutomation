@@ -32,6 +32,7 @@ COLUMN_NAMES = [
 ]
 JOINT_NO_IDX = 0
 BODY_LEN_IDX = 3
+MAX_LOSS_DEPTH_IDX = 6
 MAX_LOSS_IDX = 7
 GRADE_IDX = 8
 DAMAGE_IDX = 9
@@ -108,6 +109,7 @@ def review_row(table_name, vals, review):
 
 JOINTS_TAG = re.compile(r"\{\{joints_(\w+)\}\}")
 HIGHEST_TAG = re.compile(r"\{\{highest_(\w+)\}\}")
+SUMMARY_TAG = "{{SUMMARY}}"
 
 HIGHEST_TOP_N = 4   # how many rows in the highest-loss tables
 
@@ -136,13 +138,23 @@ def read_joints(ws):
 def read_highest(ws, top_n):
     # columns P..Y = 16..25  (P=#, Q..Y = the 10-col block; Z=rank ignored)
     # The block is pre-ranked by severity, so the worst joints sit at the top.
-    # Show at least `top_n` rows, but if there are more than `top_n` joints graded
-    # C (moderate) or D (intensive), extend the table to include all of them.
     rows = read_table_block(ws, list(range(16, 26)), 16)
-    # Grade is column index 8 within each 10-col block.
-    cd_count = sum(1 for v in rows if str(v[8]).strip() in ("C", "D"))
-    n = max(top_n, cd_count)
-    return rows[:n]
+
+    # Drop rows where Max Loss (%) is 0 or negative — not real measurements.
+    # Annotated/excluded rows (non-numeric Max Loss) are kept as-is.
+    valid_rows = [
+        v for v in rows
+        if not isinstance(v[MAX_LOSS_IDX], (int, float)) or v[MAX_LOSS_IDX] > 0
+    ]
+
+    # If fewer valid rows than top_n, show only what's available — no padding.
+    # If more than top_n exist and some are C/D, extend to include all C/D rows.
+    cd_count = sum(
+        1 for v in valid_rows
+        if isinstance(v[MAX_LOSS_IDX], (int, float)) and str(v[GRADE_IDX]).strip() in ("C", "D")
+    )
+    n = max(min(top_n, len(valid_rows)), cd_count)
+    return valid_rows[:n]
 
 
 def is_excluded(vals):
@@ -274,6 +286,96 @@ def delete_table(table):
     # Pending the answer on how headings are structured, we'll also remove those.
 
 
+# ---------------- Summary table (worst joint per pipe) ----------------
+def _strip_tag(cell, tag):
+    """Remove `tag` from a cell, touching only the runs it spans (so the rest of
+    the header label keeps its text/formatting). Handles a tag split across runs."""
+    for para in cell.paragraphs:
+        ts = para.runs
+        joined = "".join(r.text for r in ts)
+        if tag not in joined:
+            continue
+        # Fast path: a single run holds the whole tag.
+        if any(tag in r.text for r in ts):
+            for r in ts:
+                if tag in r.text:
+                    r.text = r.text.replace(tag, "")
+            continue
+        # Split across runs: drop the tag chars from the spanning runs only.
+        idx = joined.find(tag)
+        end = idx + len(tag)
+        pos = 0
+        for r in ts:
+            seg_start, seg_end = pos, pos + len(r.text)
+            pos = seg_end
+            if seg_end <= idx or seg_start >= end:
+                continue
+            left = r.text[: max(0, idx - seg_start)]
+            right = r.text[end - seg_start:] if end <= seg_end else ""
+            r.text = left + right
+
+
+def worst_joint(ws, top_n, table_name=None, review=None):
+    """The worst (highest metal loss) real joint for a pipe sheet, or None.
+
+    Uses the same severity-ranked rows as the highest-loss table and returns the
+    first row that is a genuine measurement (numeric Max Loss, not an annotated/
+    excluded joint). Grade is corrected against Max Loss via review_row, exactly
+    like the per-pipe tables."""
+    for vals in read_highest(ws, top_n):
+        if is_excluded(vals) or not isinstance(vals[MAX_LOSS_IDX], (int, float)):
+            continue
+        review_row(table_name, vals, review)   # corrects vals[GRADE_IDX] in place
+        return vals
+    return None
+
+
+def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
+                       progress=None, review=None):
+    """Fill the cross-pipe summary table in place.
+
+    Layout (per the template): col 0 = pipe name (left untouched), col 1 = Max
+    Loss (%), col 2 = Grade (+ background color), col 3 = Max Loss Depth (ft).
+
+    Row mapping is bottom-anchored: the FIRST pipe (in document/tag-appearance
+    order) fills the LAST data row, the second pipe the second-to-last, and so on.
+    No rows are added or removed; column 0 is never written."""
+    log = progress or print
+    rev = review or (lambda m: None)
+
+    data_rows = table.rows[1:]   # row 0 is the header (holds the {{SUMMARY}} tag)
+    if len(data_rows) != len(pipe_order):
+        rev(f"⚠ Summary: table has {len(data_rows)} data row(s) but {len(pipe_order)} "
+            f"pipe(s) — filling the last {min(len(data_rows), len(pipe_order))}.")
+
+    filled = 0
+    for i, sheet_name in enumerate(pipe_order):
+        ri = len(data_rows) - 1 - i   # first pipe -> last row
+        if ri < 0:
+            break
+        row = data_rows[ri]
+        if sheet_name not in sheets:
+            rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — row left blank")
+            continue
+        vals = worst_joint(wb[sheet_name], highest_top_n,
+                           table_name=f"summary[{sheet_name}]", review=rev)
+        if vals is None:
+            rev(f"⚠ Summary: '{sheet_name}' has no valid joint — row left blank")
+            continue
+        cells = row.cells
+        set_cell_text(cells[1], fmt(vals[MAX_LOSS_IDX], MAX_LOSS_IDX))     # metal loss
+        grade = str(vals[GRADE_IDX]).strip()
+        set_cell_text(cells[2], grade)                                     # grade
+        if grade in GRADE_COLORS:
+            set_cell_bg(cells[2], GRADE_COLORS[grade])                     # + bg color
+        set_cell_text(cells[3], fmt(vals[MAX_LOSS_DEPTH_IDX], MAX_LOSS_DEPTH_IDX))
+        filled += 1
+
+    _strip_tag(table.rows[0].cells[0], SUMMARY_TAG)
+    log(f"OK summary: {filled} pipe(s) filled")
+    return filled
+
+
 # ---------------- Orchestration ----------------
 def fill_report_tables(template_path, workbook_path, output_path,
                        highest_top_n=HIGHEST_TOP_N, progress=None, review=None):
@@ -295,11 +397,28 @@ def fill_report_tables(template_path, workbook_path, output_path,
 
     filled, deleted, warnings = 0, 0, []
     used = set()
+    # Pipes in document order (shallow→deep): the order their joints/highest tags
+    # first appear. The summary table is filled positionally against this list.
+    pipe_order = []
+    summary_tables = []
+
+    def _note_pipe(sheet_name):
+        if sheet_name not in pipe_order:
+            pipe_order.append(sheet_name)
 
     for table in tables:
-        if len(table.rows) < 2 or len(table.columns) < 10:
+        if not table.rows:
             continue
         header0 = table.rows[0].cells[0].text
+
+        # Summary table is only 4 columns, so handle (stash) it before the
+        # >=10-column guard. Filled after the loop, once pipe_order is complete.
+        if SUMMARY_TAG in header0:
+            summary_tables.append(table)
+            continue
+
+        if len(table.rows) < 2 or len(table.columns) < 10:
+            continue
 
         mj = JOINTS_TAG.search(header0)
         mh = HIGHEST_TAG.search(header0)
@@ -313,6 +432,7 @@ def fill_report_tables(template_path, workbook_path, output_path,
                     fill_table(table, rows, table_name=tag, review=rev)
                     set_cell_text(table.rows[0].cells[0], "#")  # restore header
                     used.add(sheet_name)
+                    _note_pipe(sheet_name)
                     filled += 1
                     log(f"OK {tag}: {len(rows)} rows")
                 except Exception as e:  # noqa: BLE001
@@ -330,6 +450,7 @@ def fill_report_tables(template_path, workbook_path, output_path,
                     rows = read_highest(wb[sheet_name], highest_top_n)
                     fill_table(table, rows, table_name=tag, review=rev)
                     set_cell_text(table.rows[0].cells[0], "#")
+                    _note_pipe(sheet_name)
                     filled += 1
                     log(f"OK {tag}: {len(rows)} rows")
                 except Exception as e:  # noqa: BLE001
@@ -338,6 +459,16 @@ def fill_report_tables(template_path, workbook_path, output_path,
                 delete_table(table)
                 deleted += 1
                 rev(f"⚠ {tag}: sheet not found in workbook → table removed")
+
+    # Summary table(s): worst joint per pipe, in document (tag-appearance) order.
+    # fill_summary_table maps the first pipe to the LAST row (see its docstring).
+    for st in summary_tables:
+        try:
+            fill_summary_table(st, wb, sheets, pipe_order, highest_top_n,
+                               progress=log, review=rev)
+            filled += 1
+        except Exception as e:  # noqa: BLE001
+            rev(f"❌ summary: failed to fill table — {e}")
 
     # Validation: pipe sheets that exist but were never filled by any tag
     pipe_sheets = {s for s in sheets if s.endswith("Pipe")}

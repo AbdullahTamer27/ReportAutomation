@@ -1,0 +1,22 @@
+# Web app dependencies (Phase 1+). Install with:
+#   pip install -r webapp/requirements.txt
+
+# --- Web framework / server (Phase 1) ---
+fastapi
+uvicorn[standard]
+
+# --- Report history DB (Phase 3) ---
+sqlalchemy
+
+# --- Native window + packaging support (Phase 5) ---
+pywebview
+
+# --- PDF rendering + preview (Phase 4) ---
+pymupdf
+docx2pdf
+
+# --- Report engine dependencies (already used by well_tools) ---
+python-docx
+openpyxl
+pandas
+lxml

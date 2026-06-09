@@ -1,0 +1,24 @@
+{
+  "companies": [
+    {
+      "name": "ALkhorayef",
+      "filename": "ALkhorayef.png"
+    },
+    {
+      "name": "APC",
+      "filename": "APC.png"
+    },
+    {
+      "name": "NESR",
+      "filename": "NESR.png"
+    },
+    {
+      "name": "SLB",
+      "filename": "SLB.jpg"
+    },
+    {
+      "name": "Weatherford",
+      "filename": "Weatherford.png"
+    }
+  ]
+}
