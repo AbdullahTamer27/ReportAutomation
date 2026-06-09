@@ -172,6 +172,34 @@
         </div>
       </section>
 
+      <section class="info-card">
+        <h3 class="info-card-title">📷 Image naming guide</h3>
+        <p class="info-card-sub">
+          Put the photos in an <code>IMGS</code> folder inside your working directory
+          (or directly in the folder itself). Use the exact base name below — any of
+          <code>.png</code> <code>.jpg</code> <code>.jpeg</code> <code>.tif</code>
+          <code>.tiff</code> is accepted.
+        </p>
+        <ul class="img-name-list">
+          <li><code>proc</code><span>Procedure</span></li>
+          <li><code>tempgr</code><span>Temperature gradient</span></li>
+          <li><code>wh</code><span>Wellhead</span></li>
+          <li><code>raw</code><span>Raw data</span></li>
+          <li><code>well</code><span>Well schematic</span></li>
+          <li><code>ts</code><span>Tubing string</span></li>
+        </ul>
+        <p class="info-card-note">
+          <strong>Damage photos</strong> — 3 per damage point, named
+          <code>DMG&lt;n&gt;_1</code>, <code>DMG&lt;n&gt;_2</code>, <code>DMG&lt;n&gt;_3</code>,
+          where <code>&lt;n&gt;</code> is the damage number (1…N from the next screen).
+          e.g. <code>DMG1_1</code>, <code>DMG1_2</code>, <code>DMG1_3</code>, <code>DMG2_1</code>…
+        </p>
+        <p class="info-card-note">
+          The <strong>company logo</strong> is <em>not</em> placed here — pick it from the
+          Company dropdown on the next screen.
+        </p>
+      </section>
+
       <button id="toWorkspace" type="button" class="primary">Continue</button>
       <div id="inputsStatus" class="status" hidden></div>
     </main>
