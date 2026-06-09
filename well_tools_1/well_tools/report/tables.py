@@ -336,19 +336,24 @@ def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
 
     Layout (per the template): col 0 = pipe name (left untouched), col 1 = Max
     Loss (%), col 2 = Grade (+ background color), col 3 = Max Loss Depth (ft).
-    Existing data rows are filled positionally against `pipe_order` (shallow→deep,
-    i.e. the order the pipes' tags appear in the document). No rows are added or
-    removed; column 0 is never written."""
+
+    Row mapping is bottom-anchored: the FIRST pipe (in document/tag-appearance
+    order) fills the LAST data row, the second pipe the second-to-last, and so on.
+    No rows are added or removed; column 0 is never written."""
     log = progress or print
     rev = review or (lambda m: None)
 
     data_rows = table.rows[1:]   # row 0 is the header (holds the {{SUMMARY}} tag)
     if len(data_rows) != len(pipe_order):
         rev(f"⚠ Summary: table has {len(data_rows)} data row(s) but {len(pipe_order)} "
-            f"pipe(s) — filling the first {min(len(data_rows), len(pipe_order))}.")
+            f"pipe(s) — filling the last {min(len(data_rows), len(pipe_order))}.")
 
     filled = 0
-    for row, sheet_name in zip(data_rows, pipe_order):
+    for i, sheet_name in enumerate(pipe_order):
+        ri = len(data_rows) - 1 - i   # first pipe -> last row
+        if ri < 0:
+            break
+        row = data_rows[ri]
         if sheet_name not in sheets:
             rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — row left blank")
             continue
@@ -455,12 +460,11 @@ def fill_report_tables(template_path, workbook_path, output_path,
                 deleted += 1
                 rev(f"⚠ {tag}: sheet not found in workbook → table removed")
 
-    # Summary table(s): worst joint per pipe. The summary template lists pipes
-    # in the reverse of their document (tag-appearance) order, so flip it.
-    summary_order = list(reversed(pipe_order))
+    # Summary table(s): worst joint per pipe, in document (tag-appearance) order.
+    # fill_summary_table maps the first pipe to the LAST row (see its docstring).
     for st in summary_tables:
         try:
-            fill_summary_table(st, wb, sheets, summary_order, highest_top_n,
+            fill_summary_table(st, wb, sheets, pipe_order, highest_top_n,
                                progress=log, review=rev)
             filled += 1
         except Exception as e:  # noqa: BLE001
