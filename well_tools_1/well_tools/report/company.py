@@ -1,18 +1,23 @@
-"""Company logo placement.
+"""Company logo + name placement.
 
-Two places get the chosen company's logo, both keyed by the tag ``{{COMP}}``:
+The chosen company contributes to the report in three ways:
 
-  1. Body — a borderless 1x1 table whose cell text is ``{{COMP}}`` (same shape as
-     the report images in ``images``). The logo is inserted there and the tag is
-     removed.
+  1. Logo body — a borderless 1x1 table whose cell text is ``{{COMP}}`` (same
+     shape as the report images in ``images``). The logo is inserted there and
+     the tag is removed.
 
-  2. Headers — the company logo also lives in the running header(s). A two-section
-     report (first-page section + body section) has two header definitions, and
-     each may have a first-page / default / even-page variant. The template author
-     marks the logo picture by setting its **Alt Text** to ``{{COMP}}`` (in Word:
-     right-click the image -> Alt Text -> Description). Every header picture so
-     marked has its embedded image bytes swapped for the chosen logo. The drawing
-     keeps its existing size/position, so layout is preserved.
+  2. Logo headers — the company logo also lives in the running header(s). A
+     two-section report (first-page section + body section) has two header
+     definitions, each with a first-page / default / even-page variant. The
+     template author marks the logo picture by setting its **Alt Text** to
+     ``{{COMP}}`` (in Word: right-click the image -> Alt Text -> Description).
+     Every header picture so marked has its embedded image bytes swapped for the
+     chosen logo, keeping its existing size/position so layout is preserved.
+
+  3. Company name text — the registered company name is written wherever the
+     text tag ``{{COMPNAME}}`` appears. This is meant for the footers (which have
+     no image, two sections), but it is replaced everywhere it occurs — body,
+     headers, and footers — so it works regardless of placement.
 
 Unlike the IMGS-folder images, the logo file is not supplied by the user per run;
 it comes from the registered company chosen in the UI (see webapp Company Manager).
@@ -31,15 +36,58 @@ COMPANY_IMG_WIDTH = Inches(2.5)
 COMPANY_MAX_HEIGHT = Inches(1.5)
 
 TAG = "{{COMP}}"
+NAME_TAG = "{{COMPNAME}}"
+
+_W_P = qn("w:p")
+_W_T = qn("w:t")
 
 
-# ---------------- Header logo swap ----------------
+# ---------------- Header / footer iteration ----------------
 def _iter_headers(doc):
     """Yield every header object across all sections (first-page / default /
     even-page variants)."""
     for section in doc.sections:
         for name in ("first_page_header", "header", "even_page_header"):
             yield getattr(section, name)
+
+
+def _iter_footers(doc):
+    """Yield every footer object across all sections (first-page / default /
+    even-page variants)."""
+    for section in doc.sections:
+        for name in ("first_page_footer", "footer", "even_page_footer"):
+            yield getattr(section, name)
+
+
+# ---------------- Company-name text replacement ----------------
+def _replace_text_in_element(el, old, new):
+    """Replace `old` -> `new` in every paragraph under `el`. Paragraphs that
+    contain the tag have their runs collapsed into the first <w:t> so a tag Word
+    split across runs is still replaced. Returns the number of paragraphs hit."""
+    count = 0
+    for p in el.iter(_W_P):
+        ts = p.findall(".//" + _W_T)
+        if not ts:
+            continue
+        joined = "".join(t.text or "" for t in ts)
+        if old not in joined:
+            continue
+        ts[0].text = joined.replace(old, new)
+        for t in ts[1:]:
+            t.text = ""
+        count += 1
+    return count
+
+
+def _replace_company_name(doc, name):
+    """Replace {{COMPNAME}} with `name` across body, headers and footers.
+    Returns the total number of paragraphs updated."""
+    total = _replace_text_in_element(doc.element.body, NAME_TAG, name)
+    for hdr in _iter_headers(doc):
+        total += _replace_text_in_element(hdr._element, NAME_TAG, name)
+    for ftr in _iter_footers(doc):
+        total += _replace_text_in_element(ftr._element, NAME_TAG, name)
+    return total
 
 
 def _docpr_matches_tag(drawing):
@@ -100,15 +148,17 @@ def _fill_body_logo(doc, logo_path):
 
 
 # ---------------- Orchestration ----------------
-def place_company_logo(path, logo_path, progress=None, review=None):
-    """Open `path`, place `logo_path` into the body {{COMP}} table and into every
-    header picture tagged {{COMP}}, save in place. Returns counts."""
+def place_company_logo(path, logo_path, company_name=None, progress=None, review=None):
+    """Open `path` and apply the chosen company: insert `logo_path` into the body
+    {{COMP}} table and every header picture tagged {{COMP}}, and replace the
+    {{COMPNAME}} text tag with `company_name` (body/headers/footers). Saves in
+    place. Returns counts."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
     if not logo_path or not os.path.isfile(logo_path):
         rev(f"❌ Company logo not placed — file not found: {logo_path}")
-        return {"body": False, "headers": 0}
+        return {"body": False, "headers": 0, "name": 0}
 
     with open(logo_path, "rb") as f:
         logo_bytes = f.read()
@@ -116,6 +166,7 @@ def place_company_logo(path, logo_path, progress=None, review=None):
     doc = Document(path)
     body_done = _fill_body_logo(doc, logo_path)
     headers_done = _swap_header_logos(doc, logo_bytes)
+    name_done = _replace_company_name(doc, company_name) if company_name else 0
     doc.save(path)
 
     if body_done:
@@ -126,5 +177,10 @@ def place_company_logo(path, logo_path, progress=None, review=None):
         log(f"Company logo swapped in {headers_done} header picture(s).")
     else:
         rev(f"⚠ No header picture tagged {TAG} (Alt Text) — header logos unchanged.")
+    if company_name:
+        if name_done:
+            log(f"Company name written into {name_done} {NAME_TAG} location(s).")
+        else:
+            rev(f"⚠ No {NAME_TAG} text found — company name not written.")
 
-    return {"body": body_done, "headers": headers_done}
+    return {"body": body_done, "headers": headers_done, "name": name_done}

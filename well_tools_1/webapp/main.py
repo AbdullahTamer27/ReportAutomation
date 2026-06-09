@@ -374,6 +374,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             damage_count=req.damage_count,
             include_disclaimer=req.include_disclaimer,
             company_logo_path=company.logo_path,
+            company_name=company.name,
             progress=on_progress,
             review=on_review,
         )

@@ -52,7 +52,8 @@ def resolve_image_folder(working_dir):
 def build_automation_report(word_template_path, excel_data_path, working_dir,
                             output_path=None, highest_top_n=4, progress=None,
                             review=None, damage_count=0,
-                            include_disclaimer=False, company_logo_path=None):
+                            include_disclaimer=False, company_logo_path=None,
+                            company_name=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -62,6 +63,7 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     `include_disclaimer` keeps the {{DISC}} table (else it is removed).
     `company_logo_path` is the chosen company's logo: placed into the {{COMP}}
     body table and swapped into every header picture tagged {{COMP}}.
+    `company_name` replaces the {{COMPNAME}} text tag (footers/body/headers).
     """
     def log(msg):
         if progress:
@@ -105,6 +107,7 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         log(f"Placing company logo: {company_logo_path}")
         from . import company
         company.place_company_logo(output_path, company_logo_path,
+                                   company_name=company_name,
                                    progress=log, review=review)
 
     log(f"Done → {output_path}")
