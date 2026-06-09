@@ -2,6 +2,13 @@
 HRDH_1702*
 improvements*
 
+# Archives
+*.zip
+
+# Generated reports (engine output — never commit these)
+Automation_Report_*.docx
+*_report.docx
+
 # Python virtual environments
 .venv/
 venv/
@@ -23,3 +30,9 @@ well_tools_1/webapp/data/outputs/
 
 # OS cruft
 .DS_Store
+
+# Local editor / dev-tool config
+.claude/
+
+# Internal planning docs (not for distribution)
+MIGRATION_PLAN.md
