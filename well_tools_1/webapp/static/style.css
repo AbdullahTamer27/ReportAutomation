@@ -115,9 +115,12 @@ h2 { font-weight: 600; letter-spacing: -0.01em; }
     0 24px 60px -24px rgba(0, 0, 0, 0.75);
 }
 .card-wide { flex-basis: 800px; max-width: 800px; }
+/* Two cards side by side (e.g. inputs: form | instructions). */
+.card-half { flex: 1 1 380px; max-width: 560px; }
 
 @media (max-width: 920px) {
   .card, .card-wide { flex-basis: 100%; max-width: 100%; }
+  .card-half { flex-basis: 100%; max-width: 100%; }
 }
 
 /* ===== Mode selection ===== */
@@ -385,6 +388,20 @@ button:disabled { opacity: 0.5; cursor: default; }
   font-size: 12px;
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ===== Sub-tools (managers on the inputs view) ===== */
+.sub-tools { margin-top: 22px; }
+.sub-tools-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sub-tools-btns .secondary {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
 }
 
 /* ===== Checkbox row ===== */

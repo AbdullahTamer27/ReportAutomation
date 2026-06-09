@@ -7,8 +7,9 @@ const els = {
   // mode
   modeReport: $("modeReport"),
   modeInterval: $("modeInterval"),
-  modeTemplates: $("modeTemplates"),
-  modeCompanies: $("modeCompanies"),
+  // report-automation sub-feature entry points (on the inputs view)
+  openTemplates: $("openTemplates"),
+  openCompanies: $("openCompanies"),
   // template manager
   tmPickFile: $("tmPickFile"),
   tmFilePath: $("tmFilePath"),
@@ -640,8 +641,8 @@ function escapeHtml(s) {
 // --- Wire up ----------------------------------------------------------------
 els.modeReport.addEventListener("click", () => showView("inputs"));
 els.modeInterval.addEventListener("click", () => showView("interval"));
-els.modeTemplates.addEventListener("click", () => showView("templates"));
-els.modeCompanies.addEventListener("click", () => showView("companies"));
+els.openTemplates.addEventListener("click", () => showView("templates"));
+els.openCompanies.addEventListener("click", () => showView("companies"));
 
 els.tmPickFile.addEventListener("click", tmPickFile);
 els.tmRegister.addEventListener("click", tmRegister);
