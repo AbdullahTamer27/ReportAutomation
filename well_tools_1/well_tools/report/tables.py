@@ -455,10 +455,12 @@ def fill_report_tables(template_path, workbook_path, output_path,
                 deleted += 1
                 rev(f"⚠ {tag}: sheet not found in workbook → table removed")
 
-    # Summary table(s): worst joint per pipe, filled in pipe_order (shallow→deep).
+    # Summary table(s): worst joint per pipe. The summary template lists pipes
+    # in the reverse of their document (tag-appearance) order, so flip it.
+    summary_order = list(reversed(pipe_order))
     for st in summary_tables:
         try:
-            fill_summary_table(st, wb, sheets, pipe_order, highest_top_n,
+            fill_summary_table(st, wb, sheets, summary_order, highest_top_n,
                                progress=log, review=rev)
             filled += 1
         except Exception as e:  # noqa: BLE001
