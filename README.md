@@ -119,6 +119,7 @@ The report builder takes three inputs:
 | ----------------------- | ------------------------------------------------------------------ |
 | `{{joints_<sheet>}}`    | Fills a full joints table from columns A–J of `<sheet>`.           |
 | `{{highest_<sheet>}}`   | Fills the highest-metal-loss table (top joints + all C/D joints).  |
+| `{{SUMMARY}}`           | Cross-pipe summary table (one pre-built row per pipe). Fills, per row, the worst joint's Metal Loss (%), Grade (+ background color) and Max Loss Depth — columns 2–4. Column 1 (pipe name) is left untouched; rows are filled shallow→deep in the order the pipe tags appear. |
 | `{{proc}}`, `{{wh}}`, … | Image placeholders, mapped to files in the working/IMGS folder.    |
 | `{{DISC}}`              | First cell of a disclaimer table. If "Include disclaimer" is checked the tag is removed and the table is kept; otherwise the whole table is deleted. |
 | `{{COMP}}`              | Company logo. Place it in a borderless 1×1 table (body) **and** set it as the **Alt Text** of the logo picture in each section header (Word → right-click image → Alt Text → Description). The logo chosen in the Company Manager fills the body table and replaces every header picture tagged this way. |
