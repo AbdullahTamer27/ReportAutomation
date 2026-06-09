@@ -90,6 +90,7 @@ class GenerateResponse(BaseModel):
     status: str
     output_path: str
     filename: str
+    notes: list[str] = []   # curated engine review items (warnings, corrections, info)
 
 
 class PreviewResponse(BaseModel):
@@ -389,11 +390,14 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         req.include_disclaimer, req.excel_path, req.working_dir,
     )
 
+    review_notes: list[str] = []
+
     def on_progress(msg):
         logger.info("[progress] %s", msg)
 
     def on_review(msg):
         logger.info("[review]   %s", msg)
+        review_notes.append(str(msg))
 
     # Use the well name for the output filename if provided (engine output_path).
     output_path = _output_path_for(req.working_dir, req.well_name)
@@ -429,6 +433,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         status=run.status,
         output_path=output_path,
         filename=os.path.basename(output_path),
+        notes=review_notes,
     )
 
 

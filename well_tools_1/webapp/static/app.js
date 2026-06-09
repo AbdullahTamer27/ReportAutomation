@@ -313,12 +313,40 @@ function showInfo(msg) {
 function showError(msg) {
   showStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
 }
+function noteClass(text) {
+  const t = String(text).trim();
+  if (t.startsWith("❌")) return "note-error";
+  if (t.startsWith("⚠")) return "note-warn";
+  if (t.startsWith("✎")) return "note-fix";
+  return "note-info";
+}
+
+function renderNotes(notes) {
+  if (!Array.isArray(notes) || notes.length === 0) return "";
+  const issues = notes.filter((n) => noteClass(n) !== "note-info").length;
+  const items = notes
+    .map((n) => `<li class="${noteClass(n)}">${escapeHtml(String(n).trim())}</li>`)
+    .join("");
+  const label = issues
+    ? `Report notes — ${issues} warning${issues === 1 ? "" : "s"}`
+    : `Report notes (${notes.length})`;
+  return `<details class="notes-panel"${issues ? " open" : ""}>
+    <summary>${label}</summary>
+    <ul class="notes-list">${items}</ul>
+  </details>`;
+}
+
 function showSuccess(data) {
+  const issues = (data.notes || []).filter((n) => noteClass(n) !== "note-info").length;
+  const heading = issues
+    ? `Report created · ${issues} warning${issues === 1 ? "" : "s"}`
+    : "Report created";
   showStatus(
     "success",
-    `<strong>Report created</strong>
+    `<strong>${heading}</strong>
      <div class="result-path">${escapeHtml(data.output_path)}</div>
-     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>`
+     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
+     ${renderNotes(data.notes)}`
   );
   const btn = $("revealBtn");
   if (btn) btn.addEventListener("click", () => reveal(data.output_path));
