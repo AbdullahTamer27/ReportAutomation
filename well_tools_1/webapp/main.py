@@ -81,9 +81,11 @@ class GenerateRequest(BaseModel):
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
     company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
     include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
-    log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag")
-    orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}}")
-    last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}}")
+    log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag (normalized to DD-Mon-YYYY)")
+    orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}} (DD-Mon-YYYY)")
+    last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}} (DD-Mon-YYYY)")
+    well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
+    btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
 
 
 class GenerateResponse(BaseModel):
@@ -406,11 +408,15 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     output_path = _output_path_for(req.working_dir, req.well_name)
 
     # Plain-text tags replaced anywhere in the document (run-preserving).
+    # Date fields are normalized to DD-Mon-YYYY (e.g. 09-Sep-2020); non-dates
+    # such as "N/A" pass through unchanged.
     text_fields = {
         "{{well_name}}": req.well_name or "",
-        "{{log_date}}": req.log_date or "",
-        "{{orig_comp}}": req.orig_comp or "",
-        "{{last_wko}}": req.last_wko or "",
+        "{{well_type}}": req.well_type or "",
+        "{{btm_depth}}": req.btm_depth or "",
+        "{{log_date}}": _normalize_date(req.log_date),
+        "{{orig_comp}}": _normalize_date(req.orig_comp),
+        "{{last_wko}}": _normalize_date(req.last_wko),
     }
 
     try:
@@ -447,6 +453,37 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         filename=os.path.basename(output_path),
         notes=review_notes,
     )
+
+
+# Accepted date inputs, parsed in order and reformatted to DD-Mon-YYYY.
+# Ambiguous numeric forms are read day-first (regional convention).
+_DATE_INPUT_FORMATS = (
+    "%d-%b-%Y", "%d-%B-%Y",          # 09-Sep-2020 / 09-September-2020 (target-ish)
+    "%Y-%m-%d", "%Y/%m/%d",          # ISO (also what a date picker yields)
+    "%d %b %Y", "%d %B %Y",          # 09 Sep 2020 / 09 September 2020
+    "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y",   # day-first numeric
+    "%b %d, %Y", "%B %d, %Y", "%b %d %Y",  # Sep 9, 2020
+)
+_DATE_OUTPUT_FORMAT = "%d-%b-%Y"     # -> 09-Sep-2020
+
+
+def _normalize_date(value):
+    """Reformat a date-like string to DD-Mon-YYYY (e.g. 09-Sep-2020).
+
+    Tries a fixed set of common formats; if none match (e.g. "N/A", "", or free
+    text), the original value is returned unchanged so the report still fills it.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    for fmt in _DATE_INPUT_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).strftime(_DATE_OUTPUT_FORMAT)
+        except ValueError:
+            continue
+    return s
 
 
 def _safe_filename(name: str) -> str:

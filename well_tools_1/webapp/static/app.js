@@ -51,6 +51,8 @@ const els = {
   // workspace
   inputsSummary: $("inputsSummary"),
   wellName: $("wellName"),
+  wellType: $("wellType"),
+  btmDepth: $("btmDepth"),
   logDate: $("logDate"),
   origComp: $("origComp"),
   lastWko: $("lastWko"),
@@ -251,6 +253,8 @@ async function generate() {
         log_date: els.logDate.value.trim() || null,
         orig_comp: els.origComp.value.trim() || null,
         last_wko: els.lastWko.value.trim() || null,
+        well_type: els.wellType.value.trim() || null,
+        btm_depth: els.btmDepth.value.trim() || null,
       }),
     });
 
