@@ -81,6 +81,9 @@ class GenerateRequest(BaseModel):
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
     company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
     include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
+    log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag")
+    orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}}")
+    last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}}")
 
 
 class GenerateResponse(BaseModel):
@@ -402,6 +405,14 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     # Use the well name for the output filename if provided (engine output_path).
     output_path = _output_path_for(req.working_dir, req.well_name)
 
+    # Plain-text tags replaced anywhere in the document (run-preserving).
+    text_fields = {
+        "{{well_name}}": req.well_name or "",
+        "{{log_date}}": req.log_date or "",
+        "{{orig_comp}}": req.orig_comp or "",
+        "{{last_wko}}": req.last_wko or "",
+    }
+
     try:
         output_path = build_automation_report(
             word_template_path=template.file_path,
@@ -412,6 +423,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             include_disclaimer=req.include_disclaimer,
             company_logo_path=company.logo_path,
             company_name=company.name,
+            text_fields=text_fields,
             progress=on_progress,
             review=on_review,
         )

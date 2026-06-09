@@ -485,6 +485,16 @@ button:disabled { opacity: 0.5; cursor: default; }
   gap: 14px;
   flex-wrap: wrap;
 }
+/* Two fields side by side (e.g. log date | original completion). */
+.field-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.field-row > .field {
+  flex: 1 1 160px;
+  margin-bottom: 20px;
+}
 .tm-row-item {
   display: flex;
   align-items: center;

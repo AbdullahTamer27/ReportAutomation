@@ -30,6 +30,7 @@ from docx.shared import Inches
 from docx.oxml.ns import qn
 
 from .images import insert_image_gentle
+from .text_fields import iter_headers, replace_fields_in_doc
 
 # Borderless body logo: target width, capped by height (aspect preserved).
 COMPANY_IMG_WIDTH = Inches(2.5)
@@ -38,84 +39,12 @@ COMPANY_MAX_HEIGHT = Inches(1.5)
 TAG = "{{COMP}}"
 NAME_TAG = "{{COMPNAME}}"
 
-_W_P = qn("w:p")
-_W_T = qn("w:t")
-
-
-# ---------------- Header / footer iteration ----------------
-def _iter_headers(doc):
-    """Yield every header object across all sections (first-page / default /
-    even-page variants)."""
-    for section in doc.sections:
-        for name in ("first_page_header", "header", "even_page_header"):
-            yield getattr(section, name)
-
-
-def _iter_footers(doc):
-    """Yield every footer object across all sections (first-page / default /
-    even-page variants)."""
-    for section in doc.sections:
-        for name in ("first_page_footer", "footer", "even_page_footer"):
-            yield getattr(section, name)
-
 
 # ---------------- Company-name text replacement ----------------
-def _replace_in_paragraph(p, old, new):
-    """Replace every `old` -> `new` inside one paragraph WITHOUT disturbing the
-    formatting of runs the tag does not touch.
-
-    Word often splits a tag across several runs. We map the paragraph's <w:t>
-    nodes to character ranges, and for each occurrence edit only the runs the tag
-    spans: the replacement text is dropped into the first spanning run (so it
-    inherits the tag's own formatting) and the tag characters are removed from
-    the others. Runs outside the tag keep their text and formatting intact, so a
-    tag in the middle of a styled paragraph no longer reflows the whole line."""
-    count = 0
-    while True:
-        ts = p.findall(".//" + _W_T)
-        if not ts:
-            return count
-        texts = [t.text or "" for t in ts]
-        idx = "".join(texts).find(old)
-        if idx < 0:
-            return count
-        end = idx + len(old)
-
-        pos = 0
-        inserted = False
-        for t, txt in zip(ts, texts):
-            seg_start, seg_end = pos, pos + len(txt)
-            pos = seg_end
-            if seg_end <= idx or seg_start >= end:
-                continue  # no overlap with the tag — leave this run untouched
-            left = txt[: max(0, idx - seg_start)]
-            right = txt[end - seg_start:] if end <= seg_end else ""
-            if not inserted:
-                t.text = left + new + right
-                inserted = True
-            else:
-                t.text = left + right
-        count += 1
-
-
-def _replace_text_in_element(el, old, new):
-    """Replace `old` -> `new` in every paragraph under `el`, preserving the
-    formatting of untouched runs. Returns the number of occurrences replaced."""
-    count = 0
-    for p in el.iter(_W_P):
-        count += _replace_in_paragraph(p, old, new)
-    return count
-
-
 def _replace_company_name(doc, name):
-    """Replace {{COMPNAME}} with `name` across body, headers and footers.
-    Returns the total number of paragraphs updated."""
-    total = _replace_text_in_element(doc.element.body, NAME_TAG, name)
-    for hdr in _iter_headers(doc):
-        total += _replace_text_in_element(hdr._element, NAME_TAG, name)
-    for ftr in _iter_footers(doc):
-        total += _replace_text_in_element(ftr._element, NAME_TAG, name)
-    return total
+    """Replace {{COMPNAME}} with `name` across body, headers and footers
+    (run-preserving, via text_fields). Returns the number of replacements."""
+    return replace_fields_in_doc(doc, {NAME_TAG: name}).get(NAME_TAG, 0)
 
 
 def _docpr_matches_tag(drawing):
@@ -137,7 +66,7 @@ def _swap_header_logos(doc, logo_bytes):
     may back several headers; each is only rewritten once."""
     swapped = 0
     rewritten_parts = set()
-    for header in _iter_headers(doc):
+    for header in iter_headers(doc):
         el = header._element
         drawings = el.findall(".//" + qn("wp:inline")) + el.findall(".//" + qn("wp:anchor"))
         for drawing in drawings:

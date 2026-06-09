@@ -51,6 +51,9 @@ const els = {
   // workspace
   inputsSummary: $("inputsSummary"),
   wellName: $("wellName"),
+  logDate: $("logDate"),
+  origComp: $("origComp"),
+  lastWko: $("lastWko"),
   config: $("configSelect"),
   company: $("companySelect"),
   damageCount: $("damageCount"),
@@ -245,6 +248,9 @@ async function generate() {
         damage_count: damageCountValue(),
         company_id: company.id,
         include_disclaimer: els.includeDisclaimer.checked,
+        log_date: els.logDate.value.trim() || null,
+        orig_comp: els.origComp.value.trim() || null,
+        last_wko: els.lastWko.value.trim() || null,
       }),
     });
 
