@@ -22,6 +22,10 @@
           <span class="mode-title">Interval Generator</span>
           <span class="mode-desc">Build depth-interval tables from WellSchematic XML.</span>
         </button>
+        <button type="button" class="mode-card" id="modeGhost">
+          <span class="mode-title">Ghost Merger</span>
+          <span class="mode-desc">Merge ghost-collar intervals in a SmartLog Joint-Analysis CSV into a clean Excel.</span>
+        </button>
       </div>
     </div>
   </section>
@@ -136,6 +140,34 @@
       <button id="intervalGenerate" type="button" class="primary">Generate Raw Data</button>
       <div id="intervalStatus" class="status" hidden></div>
       <pre id="intervalPreview" class="preview-text" hidden></pre>
+    </main>
+  </section>
+
+  <!-- ===== View: Ghost Merger ===== -->
+  <section id="view-ghost" class="view" hidden>
+    <main class="card card-wide">
+      <header>
+        <button type="button" class="link-back" data-nav="mode">← Back</button>
+        <h1>Ghost Merger 👻</h1>
+        <p class="subtitle">Merge consecutive joints separated by a “ghost collar” gap in a SmartLog Joint-Analysis CSV. The cleaned result is saved as an Excel file next to the CSV.</p>
+      </header>
+
+      <section class="field">
+        <label for="ghostLength">Ghost collar length (ft) — merge collars ≥</label>
+        <input type="number" id="ghostLength" class="text-input" min="0" step="0.1" value="3" />
+      </section>
+
+      <section class="field">
+        <label>Joint-Analysis CSV</label>
+        <div class="picker">
+          <button id="pickGhostCsv" type="button" class="secondary">Choose CSV…</button>
+          <span id="ghostCsvPath" class="path muted">No file selected</span>
+        </div>
+      </section>
+
+      <button id="ghostMerge" type="button" class="primary">Merge &amp; Export</button>
+      <div id="ghostStatus" class="status" hidden></div>
+      <pre id="ghostPreview" class="preview-text" hidden></pre>
     </main>
   </section>
 

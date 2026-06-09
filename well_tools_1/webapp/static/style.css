@@ -501,6 +501,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* add the template-manager icon badge */
 #modeTemplates.mode-card::before { content: "🗂️"; }
+#modeGhost.mode-card::before { content: "👻"; }
 
 /* ===== Interval generator ===== */
 .iv-summary {

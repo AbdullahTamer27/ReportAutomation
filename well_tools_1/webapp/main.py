@@ -51,6 +51,7 @@ from .registry import (  # noqa: E402
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 from .interval import generate_raw_data, IntervalInputError  # noqa: E402
+from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -137,6 +138,22 @@ class IntervalRequest(BaseModel):
     template_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm template to update in place")
 
 
+class GhostRequest(BaseModel):
+    csv_path: str = Field(..., description="Absolute path to the SmartLog Joint-Analysis .csv")
+    ghost_collar_length: float = Field(3.0, gt=0, description="Merge collars >= this length (ft)")
+    output_path: str | None = Field(None, description="Optional .xlsx output path; defaults beside the CSV")
+
+
+class GhostResponse(BaseModel):
+    csv_path: str
+    output_path: str
+    threshold: float
+    input_rows: int
+    output_rows: int
+    merged_chains: int
+    preview: str
+
+
 class IntervalResponse(BaseModel):
     template_path: str
     num_pipes: int
@@ -211,6 +228,22 @@ def interval_generate(req: IntervalRequest):
         logger.exception("Interval generation failed")
         raise HTTPException(status_code=500, detail=f"Interval generation failed: {e}")
     return IntervalResponse(**result)
+
+
+@app.post("/api/ghost/merge", response_model=GhostResponse)
+def ghost_merge(req: GhostRequest):
+    """Ghost Collar Merger: merge ghost-collar chains in a Joint-Analysis CSV and
+    write a cleaned .xlsx next to it (or to output_path)."""
+    logger.info("Ghost merge | csv=%s | threshold=%s", req.csv_path, req.ghost_collar_length)
+    try:
+        result = merge_ghost_collars(req.csv_path, req.ghost_collar_length, req.output_path)
+    except GhostInputError as e:
+        logger.warning("Ghost input error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Ghost merge failed")
+        raise HTTPException(status_code=500, detail=f"Ghost merge failed: {e}")
+    return GhostResponse(**result)
 
 
 def _template_to_dict(t: Template) -> dict:
