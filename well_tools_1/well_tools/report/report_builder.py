@@ -53,7 +53,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                             output_path=None, highest_top_n=4, progress=None,
                             review=None, damage_count=0,
                             include_disclaimer=False, company_logo_path=None,
-                            company_name=None, text_fields=None):
+                            company_name=None, text_fields=None,
+                            conditional_lines=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -66,6 +67,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     `company_name` replaces the {{COMPNAME}} text tag (footers/body/headers).
     `text_fields` is a {tag: value} map of plain-text tags to replace anywhere
     in the document (e.g. {{well_name}}, {{log_date}}, {{orig_comp}}, {{last_wko}}).
+    `conditional_lines` is a {tag: keep?} map: paragraphs containing the tag are
+    kept (tag stripped) when keep is True, else removed (e.g. {{weatherford_corr}}).
     """
     def log(msg):
         if progress:
@@ -117,6 +120,13 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         log("Filling well-metadata text tags…")
         from . import text_fields as tf
         tf.apply_text_fields(output_path, text_fields, progress=log, review=review)
+
+    # ---- 2.7) Company-conditional lines ({{weatherford_corr}}, …) ----
+    if conditional_lines:
+        log("Applying company-conditional lines…")
+        from . import conditional
+        conditional.apply_conditional_lines(output_path, conditional_lines,
+                                            progress=log, review=review)
 
     log(f"Done → {output_path}")
     return output_path

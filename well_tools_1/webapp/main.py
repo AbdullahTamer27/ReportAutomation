@@ -419,6 +419,10 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         "{{last_wko}}": _normalize_date(req.last_wko),
     }
 
+    # Company-conditional lines: kept only when that company is chosen.
+    is_weatherford = (company.name or "").strip().lower() == "weatherford"
+    conditional_lines = {"{{weatherford_corr}}": is_weatherford}
+
     try:
         output_path = build_automation_report(
             word_template_path=template.file_path,
@@ -430,6 +434,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             company_logo_path=company.logo_path,
             company_name=company.name,
             text_fields=text_fields,
+            conditional_lines=conditional_lines,
             progress=on_progress,
             review=on_review,
         )
