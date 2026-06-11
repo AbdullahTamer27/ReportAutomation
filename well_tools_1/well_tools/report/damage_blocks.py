@@ -25,6 +25,8 @@ INDEX_SENTINEL = "@N"
 
 _W_P = qn("w:p")
 _W_T = qn("w:t")
+_WP_DOCPR = qn("wp:docPr")
+_PIC_CNVPR = qn("pic:cNvPr")
 
 
 def _element_text(el):
@@ -32,9 +34,9 @@ def _element_text(el):
 
 
 def _subst_index_in_element(el, i):
-    """Replace @N -> i in every paragraph of `el`. Each paragraph that contains
-    the sentinel has its runs collapsed into the first <w:t> so the token is
-    replaced even if Word split it across runs."""
+    """Replace @N -> i in `el`: in paragraph text (runs collapsed so a split
+    token is still replaced) AND in any placeholder picture's Alt Text
+    (wp:docPr name/descr/title), so {{DMG@N_1}} becomes {{DMG1_1}}, etc."""
     for p in el.iter(_W_P):
         ts = p.findall(".//" + _W_T)
         if not ts:
@@ -45,6 +47,34 @@ def _subst_index_in_element(el, i):
         ts[0].text = joined.replace(INDEX_SENTINEL, str(i))
         for t in ts[1:]:
             t.text = ""
+
+    # Alt Text on placeholder pictures (lives in attributes, not <w:t>).
+    for docPr in el.iter(_WP_DOCPR):
+        for attr in ("name", "descr", "title"):
+            v = docPr.get(attr)
+            if v and INDEX_SENTINEL in v:
+                docPr.set(attr, v.replace(INDEX_SENTINEL, str(i)))
+
+
+def _max_drawing_id(body):
+    """Highest existing wp:docPr / pic:cNvPr id in the body (0 if none)."""
+    mx = 0
+    for tag in (_WP_DOCPR, _PIC_CNVPR):
+        for el in body.iter(tag):
+            try:
+                mx = max(mx, int(el.get("id")))
+            except (TypeError, ValueError):
+                pass
+    return mx
+
+
+def _reassign_drawing_ids(clone, counter):
+    """Give every picture in `clone` a fresh unique id so cloned drawings don't
+    collide (duplicate ids make Word offer to 'repair' the document)."""
+    for tag in (_WP_DOCPR, _PIC_CNVPR):
+        for el in clone.iter(tag):
+            el.set("id", str(counter[0]))
+            counter[0] += 1
 
 
 def expand_damage_blocks(doc, damage_count):
@@ -78,11 +108,14 @@ def expand_damage_blocks(doc, damage_count):
         if collecting:
             block.append(el)
 
-    # Insert N clones just before the end marker (preserves order).
+    # Insert N clones just before the end marker (preserves order). Cloned
+    # pictures get fresh unique ids so Word doesn't flag duplicate drawing ids.
+    id_counter = [_max_drawing_id(body) + 1]
     for i in range(1, int(damage_count) + 1):
         for el in block:
             clone = copy.deepcopy(el)
             _subst_index_in_element(clone, i)
+            _reassign_drawing_ids(clone, id_counter)
             end.addprevious(clone)
 
     # Remove the original block + both markers.

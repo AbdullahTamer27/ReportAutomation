@@ -11,6 +11,7 @@ import os
 import re
 from docx import Document
 from docx.shared import Inches
+from docx.oxml.ns import qn
 from lxml import etree
 
 # ---------------- Settings ----------------
@@ -120,6 +121,99 @@ def insert_image_gentle(cell, image_path, tag, img_width, max_height,
     return sized_by
 
 
+# ---------------- Alt-text placeholder pictures ----------------
+# A template can mark an image slot with a real placeholder picture whose Alt
+# Text (wp:docPr/@descr) holds the tag, e.g. {{proc}} or {{DMG1_1}}. We keep the
+# picture's frame (size box, border, position) and only swap which image it
+# points at, fitting the new image inside the box with its aspect preserved.
+_TAG_TOKEN = re.compile(r"\{\{[^}]+\}\}")
+
+
+def _alttext_tag(drawing):
+    """Return the {{...}} tag found in a drawing's Alt Text (descr/name/title)."""
+    docPr = drawing.find(".//" + qn("wp:docPr"))
+    if docPr is None:
+        return None
+    for attr in ("descr", "name", "title"):
+        v = docPr.get(attr)
+        if v:
+            m = _TAG_TOKEN.search(v)
+            if m:
+                return m.group(0)
+    return None
+
+
+def _fit_drawing_extent(drawing, image):
+    """Resize the drawing's box to fit `image` inside it, preserving aspect.
+    Updates both wp:extent (layout size) and the pic a:ext (shape size)."""
+    extent = drawing.find(".//" + qn("wp:extent"))
+    if extent is None or not image.px_height or not image.px_width:
+        return
+    try:
+        box_cx, box_cy = int(extent.get("cx")), int(extent.get("cy"))
+    except (TypeError, ValueError):
+        return
+    if box_cx <= 0 or box_cy <= 0:
+        return
+    aspect = image.px_width / image.px_height          # w/h
+    if (box_cx / box_cy) > aspect:                     # box wider than image → fit height
+        new_cy, new_cx = box_cy, int(round(box_cy * aspect))
+    else:                                              # fit width
+        new_cx, new_cy = box_cx, int(round(box_cx / aspect))
+    extent.set("cx", str(new_cx)); extent.set("cy", str(new_cy))
+    xfrm = drawing.find(".//" + qn("a:xfrm"))
+    if xfrm is not None:
+        a_ext = xfrm.find(qn("a:ext"))
+        if a_ext is not None:
+            a_ext.set("cx", str(new_cx)); a_ext.set("cy", str(new_cy))
+
+
+def _replace_drawing_image(doc, drawing, image_path):
+    """Re-point the drawing's picture at `image_path` (a new image part) and fit
+    the box to the new image. Keeps the existing border / position."""
+    blip = drawing.find(".//" + qn("a:blip"))
+    if blip is None:
+        return False
+    rId, image = doc.part.get_or_add_image(image_path)
+    blip.set(qn("r:embed"), rId)
+    _fit_drawing_extent(drawing, image)
+    return True
+
+
+def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=None):
+    """Fill every body picture whose Alt Text is a known image tag. Returns
+    (placed, skipped, missing). Non-image tags (e.g. {{COMP}}) are ignored."""
+    log = progress or print
+    rev = review or (lambda m: None)
+    placed, skipped, missing = 0, 0, []
+
+    body = doc.element.body
+    drawings = list(body.iter(qn("wp:inline"))) + list(body.iter(qn("wp:anchor")))
+    for drawing in drawings:
+        tag = _alttext_tag(drawing)
+        if not tag:
+            continue
+        fname = _filename_for_tag(tag, tag_to_file)
+        if not fname:
+            continue   # tag present but not an image tag (e.g. {{COMP}}) — skip
+        image_path = _resolve_image_path(img_folder, fname)
+        if image_path:
+            try:
+                _replace_drawing_image(doc, drawing, image_path)
+                log(f"OK placed {os.path.basename(image_path)} into {tag} (alt-text)")
+                placed += 1
+            except Exception as e:  # noqa: BLE001
+                rev(f"❌ {tag}: image not placed — {os.path.basename(image_path)}: {e}")
+                missing.append(os.path.basename(image_path)); skipped += 1
+        else:
+            stem = os.path.splitext(fname)[0]
+            exts = "/".join(e.lstrip(".") for e in SUPPORTED_EXTS)
+            rev(f"❌ {tag}: image not placed — no file '{stem}.[{exts}]' in folder")
+            missing.append(fname); skipped += 1
+
+    return placed, skipped, missing
+
+
 # ---------------- Orchestration ----------------
 def place_report_images(template_path, img_folder, output_path,
                         tag_to_file=None, img_width=DEFAULT_IMG_WIDTH,
@@ -161,6 +255,13 @@ def place_report_images(template_path, img_folder, output_path,
                     rev(f"❌ {tag}: image not placed — no file '{stem}.[{exts}]' in folder")
                     missing.append(fname)
                     skipped += 1
+
+    # Alt-text placeholder pictures (the table-free approach): swap in place.
+    a_placed, a_skipped, a_missing = place_images_by_alttext(
+        doc, img_folder, tag_to_file, progress=log, review=rev)
+    placed += a_placed
+    skipped += a_skipped
+    missing += a_missing
 
     doc.save(output_path)
     rev(f"Images — placed {placed}, skipped {skipped}"
