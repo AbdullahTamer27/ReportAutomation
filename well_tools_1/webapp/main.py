@@ -407,17 +407,37 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     # Use the well name for the output filename if provided (engine output_path).
     output_path = _output_path_for(req.working_dir, req.well_name)
 
-    # Plain-text tags replaced anywhere in the document (run-preserving).
-    # Date fields are normalized to DD-Mon-YYYY (e.g. 09-Sep-2020); non-dates
-    # such as "N/A" pass through unchanged.
+    # Plain-text tags replaced anywhere in the document (run-preserving). These
+    # fields are OPTIONAL (only configuration, company, and number of damages are
+    # required): a blank gets a default value and a warning in the report notes.
+    # Date fields are normalized to DD-Mon-YYYY; non-dates ("N/A") pass through.
+    OPTIONAL_DEFAULT = "N/A"
+    defaulted = []
+
+    def _opt(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return str(value)
+
+    def _opt_date(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return _normalize_date(value)
+
     text_fields = {
-        "{{well_name}}": req.well_name or "",
-        "{{well_type}}": req.well_type or "",
-        "{{btm_depth}}": req.btm_depth or "",
-        "{{log_date}}": _normalize_date(req.log_date),
-        "{{orig_comp}}": _normalize_date(req.orig_comp),
-        "{{last_wko}}": _normalize_date(req.last_wko),
+        "{{well_name}}": _opt(req.well_name, "Well name"),
+        "{{well_type}}": _opt(req.well_type, "Well type"),
+        "{{btm_depth}}": _opt(req.btm_depth, "Bottom depth"),
+        "{{log_date}}": _opt_date(req.log_date, "Log date"),
+        "{{orig_comp}}": _opt_date(req.orig_comp, "Original completion"),
+        "{{last_wko}}": _opt_date(req.last_wko, "Last workover"),
     }
+    if defaulted:
+        review_notes.append(
+            f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
+        )
 
     # Company-conditional lines: kept only when that company is chosen.
     is_weatherford = (company.name or "").strip().lower() == "weatherford"

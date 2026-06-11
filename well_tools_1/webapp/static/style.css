@@ -365,6 +365,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 .note-fix   { color: var(--info-fg); }
 .note-info  { color: var(--text-dim); opacity: 0.85; }
 
+/* "(optional)" marker inside a field label */
+.opt {
+  text-transform: none;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
 /* ===== Hint ===== */
 .hint {
   font-size: 12.5px;
