@@ -366,13 +366,18 @@ def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
     filled = 0
 
     if pipe_model is not None:
-        n = len(pipe_model)
-        if n > nrows:
-            rev(f"⚠ Summary: {n} pipes but only {nrows} data rows — extra pipes dropped.")
-        for i, p in enumerate(pipe_model):
-            ri = nrows - 1 - i        # first pipe → last row
-            if ri < 0:
-                break
+        # Dynamic, like the other tables: the template has 1 header + 1 styled
+        # data row, which we clone once per pipe. Cloning appends to the bottom,
+        # so iterating in reverse puts the FIRST pipe in the LAST row.
+        if len(table.rows) < 2:
+            rev("⚠ Summary: needs a header row + one data row to clone — nothing filled.")
+            _strip_tag(table.rows[0].cells[0], SUMMARY_TAG)
+            return 0
+        template_row = table.rows[1]
+        for p in reversed(pipe_model):
+            new_row = clone_row(table, template_row)
+            for c in new_row.cells:
+                reset_cell(c)
             sheet_name = p["sheet"]
             vals = None
             if sheet_name in sheets:
@@ -382,12 +387,9 @@ def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
                     rev(f"⚠ Summary: '{sheet_name}' has no valid joint — data left blank")
             else:
                 rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — data left blank")
-            _fill_summary_row(data_rows[ri], vals, rev, suffix=p.get("suffix", ""))
+            _fill_summary_row(new_row, vals, rev, suffix=p.get("suffix", ""))
             filled += 1
-        # Delete the unused top rows so the table is exactly N rows.
-        for ri in range(0, max(0, nrows - n)):
-            tr = data_rows[ri]._tr
-            tr.getparent().remove(tr)
+        template_row._tr.getparent().remove(template_row._tr)   # drop the template row
     else:
         if nrows != len(pipe_order):
             rev(f"⚠ Summary: table has {nrows} data row(s) but {len(pipe_order)} "

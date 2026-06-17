@@ -37,8 +37,12 @@ MAX_PIPES = len(ROLE_NAMES)
 TYPE_FULL = {"TBG": "Tubing", "LNR": "Liner", "CSG": "Casing"}
 TYPE_CODES = tuple(TYPE_FULL)
 
-# Bottom Body (ft) is column index 2 in the 10-column joints block.
+# Grade → severity word for the highest-metal-loss grade of a pipe.
+SEVERITY = {"A": "Light", "B": "Minor", "C": "Moderate", "D": "Intensive"}
+
+# Column indices in the 10-column joints block.
 _BOTTOM_BODY_IDX = 2
+_MAX_LOSS_IDX = 7
 
 _SEGMENT = re.compile(
     r"^\s*(\d+(?:\.\d+)?)(?:[xX×](\d+(?:\.\d+)?))?\s*(TBG|LNR|CSG)?\s*$",
@@ -128,7 +132,7 @@ def build_pipe_model(config_str, excel_path=None, review=None):
 
     if excel_path and os.path.isfile(excel_path):
         import openpyxl
-        from .tables import read_joints
+        from .tables import read_joints, grade_for_loss
 
         wb = openpyxl.load_workbook(excel_path, data_only=True)
         sheets = set(wb.sheetnames)
@@ -137,19 +141,39 @@ def build_pipe_model(config_str, excel_path=None, review=None):
                 rows = read_joints(wb[p["sheet"]])
                 bottoms = [r[_BOTTOM_BODY_IDX] for r in rows
                            if isinstance(r[_BOTTOM_BODY_IDX], (int, float))]
+                losses = [r[_MAX_LOSS_IDX] for r in rows
+                          if isinstance(r[_MAX_LOSS_IDX], (int, float)) and r[_MAX_LOSS_IDX] >= 0]
                 p["joint_count"] = len(rows)
                 p["shoe"] = max(bottoms) if bottoms else None
+                p["highest_grade"] = grade_for_loss(max(losses)) if losses else None
             else:
                 p["joint_count"] = 0
                 p["shoe"] = None
+                p["highest_grade"] = None
                 msg = f"⚠ Configuration: no '{p['sheet']}' sheet in the workbook for {p['suffix']}."
                 warnings.append(msg)
                 rev(msg)
             p["shoe_text"] = format_depth(p["shoe"])
+            p["highest_severity"] = SEVERITY.get(p["highest_grade"], "")
     else:
         for p in pipes:
             p["joint_count"] = None
             p["shoe"] = None
             p["shoe_text"] = ""
+            p["highest_grade"] = None
+            p["highest_severity"] = ""
 
     return {"pipes": pipes, "warnings": warnings}
+
+
+# ---------------- Type lists (casings / liners / tubings) ----------------
+def pipes_of_type(pipes, type_code):
+    """Pipes of a given type (TBG/LNR/CSG), sorted by primary size, descending."""
+    return sorted((p for p in pipes if p.get("type") == type_code),
+                  key=lambda p: p["sizes"][0], reverse=True)
+
+
+def sizes_list_string(pipes, type_code):
+    """Comma-separated size labels for all pipes of `type_code`, largest first
+    (sizes only, no type word). E.g. '18 5/8", 13 3/8", 9 5/8"'."""
+    return ", ".join(_sizes_label(p["sizes"]) for p in pipes_of_type(pipes, type_code))

@@ -446,8 +446,11 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         logger.info("[review]   %s", msg)
         review_notes.append(str(msg))
 
-    # Use the well name for the output filename if provided (engine output_path).
-    output_path = _output_path_for(req.working_dir, req.well_name)
+    # Output filename: wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx
+    output_path = os.path.join(
+        req.working_dir,
+        _report_filename(req.well_name, _normalize_date(req.log_date), company.name),
+    )
 
     # Plain-text tags replaced anywhere in the document (run-preserving). These
     # fields are OPTIONAL (only configuration, company, and number of damages are
@@ -475,11 +478,15 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         "{{log_date}}": _opt_date(req.log_date, "Log date"),
         "{{orig_comp}}": _opt_date(req.orig_comp, "Original completion"),
         "{{last_wko}}": _opt_date(req.last_wko, "Last workover"),
+        # Delivery date = today's date, formatted like the other dates. Auto-filled.
+        "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
     }
     if defaulted:
         review_notes.append(
             f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
         )
+    # Auto-derived tags never nag if a template doesn't use them.
+    text_fields_quiet = {"{{delivery_date}}"}
 
     # Company-conditional lines: kept only when that company is chosen.
     is_weatherford = (company.name or "").strip().lower() == "weatherford"
@@ -488,22 +495,24 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     # Universal master template: parse the configuration into the pipe model and
     # add each pipe's metadata tags. Absent here ⇒ legacy per-config template.
     pipe_model = None
-    text_fields_quiet = None
     if req.config and req.config.strip():
+        from well_tools.report.pipe_config import sizes_list_string  # noqa: E402
         try:
             pm = build_pipe_model(req.config, req.excel_path, review=on_review)
         except ConfigParseError as e:
             raise HTTPException(status_code=400, detail=f"Configuration: {e}")
         pipe_model = pm["pipes"]
-        pipe_tags = set()
         for p in pipe_model:
             role = p["role"]
-            for key, val in (("name", p["name"]), ("suffix", p["suffix"]), ("shoe", p["shoe_text"])):
+            for key, val in (("name", p["name"]), ("suffix", p["suffix"]),
+                             ("shoe", p["shoe_text"]), ("highest_grade", p["highest_severity"])):
                 tag = f"{{{{{role}_{key}}}}}"
                 text_fields[tag] = val
-                pipe_tags.add(tag)
-        # Auto-derived pipe tags: don't warn if a template doesn't use every variant.
-        text_fields_quiet = pipe_tags
+                text_fields_quiet.add(tag)
+        # Casing / liner / tubing size lists (sizes only, largest first).
+        for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
+            text_fields[tag] = sizes_list_string(pipe_model, code)
+            text_fields_quiet.add(tag)
 
     try:
         output_path = build_automation_report(
@@ -590,6 +599,18 @@ def _output_path_for(working_dir: str, well_name):
     if not stem:
         return None
     return os.path.join(working_dir, f"{stem}_report.docx")
+
+
+def _report_filename(well_name, log_date_disp, company_name):
+    """wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx (blanks → 'NA')."""
+    parts = [
+        (well_name or "").strip() or "NA",
+        (log_date_disp or "").strip() or "NA",
+        "EPDT", "RIGLESS", "REPORT",
+        (company_name or "").strip() or "NA",
+    ]
+    stem = _safe_filename("_".join(parts)).replace(" ", "_")
+    return f"{stem}.docx"
 
 
 @app.post("/api/preview/{run_id}", response_model=PreviewResponse)
