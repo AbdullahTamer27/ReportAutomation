@@ -137,6 +137,7 @@ def build_pipe_model(config_str, excel_path=None, review=None):
         wb = openpyxl.load_workbook(excel_path, data_only=True)
         sheets = set(wb.sheetnames)
         for p in pipes:
+            p["sheet_found"] = p["sheet"] in sheets
             if p["sheet"] in sheets:
                 rows = read_joints(wb[p["sheet"]])
                 bottoms = [r[_BOTTOM_BODY_IDX] for r in rows
@@ -155,6 +156,14 @@ def build_pipe_model(config_str, excel_path=None, review=None):
                 rev(msg)
             p["shoe_text"] = format_depth(p["shoe"])
             p["highest_severity"] = SEVERITY.get(p["highest_grade"], "")
+        # Case 2: workbook pipe sheets the configuration doesn't reference.
+        config_sheets = {p["sheet"] for p in pipes}
+        extra = sorted(s for s in sheets if s.endswith("Pipe") and s not in config_sheets)
+        for s in extra:
+            msg = (f"⚠ Workbook has a '{s}' sheet not in the configuration "
+                   f"— its data is not included.")
+            warnings.append(msg)
+            rev(msg)
     else:
         for p in pipes:
             p["joint_count"] = None
@@ -162,6 +171,7 @@ def build_pipe_model(config_str, excel_path=None, review=None):
             p["shoe_text"] = ""
             p["highest_grade"] = None
             p["highest_severity"] = ""
+            p["sheet_found"] = None
 
     return {"pipes": pipes, "warnings": warnings}
 

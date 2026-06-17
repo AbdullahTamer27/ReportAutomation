@@ -394,6 +394,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .cfg-dim { color: var(--muted); }
 .cfg-warn { color: #fbbf24; }
+#previewResult .status { margin-top: 0; }
+#previewResult:not(:empty) { margin-bottom: 16px; }
+
+.cfg-bad { color: var(--error-fg); }
+.cfg-block {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-bd);
+  color: var(--error-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
 
 /* "(optional)" marker inside a field label */
 .opt {

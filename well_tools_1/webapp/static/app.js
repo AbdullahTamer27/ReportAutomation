@@ -69,6 +69,7 @@ const els = {
   status: $("status"),
   previewPanel: $("previewPanel"),
   previewMeta: $("previewMeta"),
+  previewResult: $("previewResult"),
   previewBody: $("previewBody"),
 };
 
@@ -78,6 +79,7 @@ const state = {
   companies: [],
   companiesLoaded: false,
   excelPath: null,
+  configOk: false,   // config parsed AND every configured pipe has its Excel sheet
 };
 
 const ivState = { xmlPath: null, templatePath: null };
@@ -168,7 +170,8 @@ function configValue() {
 }
 
 function updateGenerateEnabled() {
-  els.generate.disabled = !(resolveTemplate() && resolveCompany() && configValue());
+  els.generate.disabled =
+    !(resolveTemplate() && resolveCompany() && configValue() && state.configOk);
 }
 
 function resolveTemplate() {
@@ -188,6 +191,7 @@ function refreshTemplateHint() {
 let _cfgTimer = null;
 function scheduleConfigPreview() {
   clearTimeout(_cfgTimer);
+  state.configOk = false;        // pending until the preview validates it
   _cfgTimer = setTimeout(previewConfig, 350);
   updateGenerateEnabled();
 }
@@ -197,6 +201,8 @@ async function previewConfig() {
   if (!cfg) {
     els.configPreview.hidden = true;
     els.configPreview.innerHTML = "";
+    state.configOk = false;
+    updateGenerateEnabled();
     return;
   }
   try {
@@ -208,23 +214,35 @@ async function previewConfig() {
     const data = await res.json().catch(() => ({}));
     els.configPreview.hidden = false;
     if (!res.ok) {
+      state.configOk = false;
       els.configPreview.className = "config-preview cfg-error";
       els.configPreview.innerHTML =
         `<strong>Can't parse:</strong> ${escapeHtml(data.detail || "HTTP " + res.status)}`;
+      updateGenerateEnabled();
       return;
     }
     renderConfigPreview(data);
   } catch (err) {
+    state.configOk = false;
     els.configPreview.hidden = false;
     els.configPreview.className = "config-preview cfg-error";
     els.configPreview.textContent = `Preview failed: ${err.message || err}`;
+    updateGenerateEnabled();
   }
 }
 
 function renderConfigPreview(data) {
-  els.configPreview.className = "config-preview";
+  // Case 1 (config > data): any configured pipe missing its Excel sheet blocks generate.
+  const missing = data.pipes.filter((p) => p.sheet_found === false);
+  state.configOk = missing.length === 0;
+
+  els.configPreview.className = "config-preview" + (missing.length ? " cfg-error" : "");
   const items = data.pipes
     .map((p) => {
+      if (p.sheet_found === false) {
+        return `<li class="cfg-bad"><span class="cfg-role">${escapeHtml(p.role)}</span>
+                ${escapeHtml(p.suffix)} <span class="cfg-dim">→ no “${escapeHtml(p.sheet)}” sheet in the workbook</span></li>`;
+      }
       const joints = p.joint_count == null ? "" : ` · ${p.joint_count} joints`;
       const shoe = p.shoe_text ? ` · shoe ${escapeHtml(p.shoe_text)} ft` : "";
       return `<li><span class="cfg-role">${escapeHtml(p.role)}</span> ${escapeHtml(p.suffix)}
@@ -234,9 +252,14 @@ function renderConfigPreview(data) {
   const warns = (data.warnings || [])
     .map((w) => `<li class="cfg-warn">${escapeHtml(w)}</li>`)
     .join("");
+  const blocked = missing.length
+    ? `<div class="cfg-block">⛔ Configuration has ${data.pipes.length} pipe(s) but the workbook is
+       missing ${missing.length} sheet(s). Fix the configuration or the Excel to generate.</div>`
+    : "";
   els.configPreview.innerHTML =
     `<div class="cfg-title">${data.pipes.length} pipe${data.pipes.length === 1 ? "" : "s"}</div>
-     <ul class="cfg-list">${items}${warns}</ul>`;
+     <ul class="cfg-list">${items}${warns}</ul>${blocked}`;
+  updateGenerateEnabled();
 }
 
 function damageCountValue() {
@@ -301,6 +324,10 @@ async function generate() {
 
   setLoading(true);
   showInfo("Generating report…");
+  // Reset the right panel (previous result + preview) for this run.
+  els.previewResult.innerHTML = "";
+  els.previewBody.innerHTML = "";
+  els.previewPanel.hidden = true;
 
   try {
     const res = await fetch("/api/report/generate", {
@@ -412,24 +439,27 @@ function renderNotes(notes) {
 }
 
 function showSuccess(data) {
+  hide(els.status);   // result + notes now live on the right, above the preview
   const issues = (data.notes || []).filter((n) => noteClass(n) !== "note-info").length;
   const heading = issues
     ? `Report created · ${issues} warning${issues === 1 ? "" : "s"}`
     : "Report created";
-  showStatus(
-    "success",
-    `<strong>${heading}</strong>
-     <div class="result-path">${escapeHtml(data.output_path)}</div>
-     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
-     ${renderNotes(data.notes)}`
-  );
+  els.previewPanel.hidden = false;
+  els.previewResult.innerHTML =
+    `<div class="status success">
+       <strong>${heading}</strong>
+       <div class="result-path">${escapeHtml(data.output_path)}</div>
+       <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
+       ${renderNotes(data.notes)}
+     </div>`;
   const btn = $("revealBtn");
   if (btn) btn.addEventListener("click", () => reveal(data.output_path));
   requestPreview(data.run_id);
 }
 
 function setLoading(loading) {
-  els.generate.disabled = loading || !resolveTemplate() || !resolveCompany() || !configValue();
+  els.generate.disabled =
+    loading || !resolveTemplate() || !resolveCompany() || !configValue() || !state.configOk;
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 

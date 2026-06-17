@@ -159,6 +159,8 @@ class PipeOut(BaseModel):
     joint_count: int | None = None
     shoe: float | None = None
     shoe_text: str = ""
+    sheet_found: bool | None = None
+    highest_severity: str = ""
 
 
 class ConfigPreviewResponse(BaseModel):
