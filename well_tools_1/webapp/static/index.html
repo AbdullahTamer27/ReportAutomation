@@ -260,6 +260,36 @@
           <p id="inputsSummary" class="subtitle"></p>
         </header>
 
+        <!-- Required inputs -->
+        <section class="field">
+          <label for="configInput">Configuration</label>
+          <input type="text" id="configInput" class="text-input" list="configPresets"
+                 placeholder="e.g. 4.5x3.5TBG-7LNR-9.625-13.375-18.625" autocomplete="off" />
+          <datalist id="configPresets">
+            <option value="4.5TBG-7-9.625-13.375"></option>
+            <option value="4.5TBG-7-9.625-13.375-18.625"></option>
+            <option value="4.5x3.5TBG-7-9.625-13.375"></option>
+            <option value="4.5x3.5TBG-7LNR-9.625-13.375-18.625"></option>
+          </datalist>
+          <div id="configPreview" class="config-preview" hidden></div>
+        </section>
+
+        <section class="field">
+          <label for="companySelect">Company</label>
+          <select id="companySelect"></select>
+        </section>
+
+        <section class="field">
+          <label for="damageCount">Number of damages</label>
+          <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
+        </section>
+
+        <p id="templateHint" class="hint"></p>
+        <p id="companyHint" class="hint"></p>
+
+        <!-- Optional details -->
+        <p class="section-label">Optional details</p>
+
         <section class="field">
           <label for="wellName">Well name <span class="opt">(optional)</span></label>
           <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
@@ -293,37 +323,11 @@
         </section>
 
         <section class="field">
-          <label for="configInput">Configuration</label>
-          <input type="text" id="configInput" class="text-input" list="configPresets"
-                 placeholder="e.g. 4.5x3.5TBG-7LNR-9.625-13.375-18.625" autocomplete="off" />
-          <datalist id="configPresets">
-            <option value="4.5TBG-7-9.625-13.375"></option>
-            <option value="4.5TBG-7-9.625-13.375-18.625"></option>
-            <option value="4.5x3.5TBG-7-9.625-13.375"></option>
-            <option value="4.5x3.5TBG-7LNR-9.625-13.375-18.625"></option>
-          </datalist>
-          <div id="configPreview" class="config-preview" hidden></div>
-        </section>
-
-        <section class="field">
-          <label for="companySelect">Company</label>
-          <select id="companySelect"></select>
-        </section>
-
-        <section class="field">
-          <label for="damageCount">Number of damages</label>
-          <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
-        </section>
-
-        <section class="field">
           <label class="checkbox-row">
             <input type="checkbox" id="includeDisclaimer" />
             <span>Include disclaimer</span>
           </label>
         </section>
-
-        <p id="templateHint" class="hint"></p>
-        <p id="companyHint" class="hint"></p>
 
         <button id="generate" type="button" class="primary">Generate Report</button>
         <div id="status" class="status" hidden></div>
