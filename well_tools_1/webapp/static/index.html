@@ -198,6 +198,12 @@
           </div>
         </section>
 
+        <section class="field">
+          <label for="templateSelect">Report template</label>
+          <select id="templateSelect"></select>
+          <p id="templatePickHint" class="hint"></p>
+        </section>
+
         <button id="toWorkspace" type="button" class="primary">Continue</button>
         <div id="inputsStatus" class="status" hidden></div>
       </main>
@@ -287,8 +293,16 @@
         </section>
 
         <section class="field">
-          <label for="configSelect">Configuration</label>
-          <select id="configSelect"></select>
+          <label for="configInput">Configuration</label>
+          <input type="text" id="configInput" class="text-input" list="configPresets"
+                 placeholder="e.g. 4.5x3.5TBG-7LNR-9.625-13.375-18.625" autocomplete="off" />
+          <datalist id="configPresets">
+            <option value="4.5TBG-7-9.625-13.375"></option>
+            <option value="4.5TBG-7-9.625-13.375-18.625"></option>
+            <option value="4.5x3.5TBG-7-9.625-13.375"></option>
+            <option value="4.5x3.5TBG-7LNR-9.625-13.375-18.625"></option>
+          </datalist>
+          <div id="configPreview" class="config-preview" hidden></div>
         </section>
 
         <section class="field">

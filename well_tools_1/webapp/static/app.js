@@ -46,6 +46,8 @@ const els = {
   excelPath: $("excelPath"),
   workingDirInput: $("workingDirInput"),
   browseFolder: $("browseFolder"),
+  templateSelect: $("templateSelect"),
+  templatePickHint: $("templatePickHint"),
   toWorkspace: $("toWorkspace"),
   inputsStatus: $("inputsStatus"),
   // workspace
@@ -56,7 +58,8 @@ const els = {
   logDate: $("logDate"),
   origComp: $("origComp"),
   lastWko: $("lastWko"),
-  config: $("configSelect"),
+  configInput: $("configInput"),
+  configPreview: $("configPreview"),
   company: $("companySelect"),
   damageCount: $("damageCount"),
   includeDisclaimer: $("includeDisclaimer"),
@@ -105,7 +108,22 @@ async function ensureTemplates() {
   if (!res.ok) throw new Error(`Failed to load templates (HTTP ${res.status})`);
   state.templates = await res.json();
   state.templatesLoaded = true;
-  populateConfigOptions();
+  populateTemplateOptions();
+}
+
+function populateTemplateOptions() {
+  els.templateSelect.innerHTML = "";
+  for (const t of state.templates) {
+    const opt = document.createElement("option");
+    opt.value = String(t.id);
+    opt.textContent = t.config_key ? `${t.name} — ${t.config_key}` : t.name;
+    els.templateSelect.appendChild(opt);
+  }
+  if (els.templatePickHint) {
+    els.templatePickHint.textContent = state.templates.length
+      ? "" : "No templates registered — add one in the Template Manager.";
+    els.templatePickHint.classList.toggle("hint-warn", state.templates.length === 0);
+  }
 }
 
 async function ensureCompanies() {
@@ -145,38 +163,80 @@ function refreshCompanyHint() {
   updateGenerateEnabled();
 }
 
-function updateGenerateEnabled() {
-  els.generate.disabled = !(resolveTemplate() && resolveCompany());
+function configValue() {
+  return (els.configInput.value || "").trim();
 }
 
-function populateConfigOptions() {
-  const configs = [...new Set(state.templates.map((t) => t.config_key))].sort();
-  els.config.innerHTML = "";
-  for (const c of configs) {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    els.config.appendChild(opt);
-  }
-  refreshTemplateHint();
+function updateGenerateEnabled() {
+  els.generate.disabled = !(resolveTemplate() && resolveCompany() && configValue());
 }
 
 function resolveTemplate() {
-  // Configuration alone selects the template; damages are independent (N).
-  const configKey = els.config.value;
-  return state.templates.find((t) => t.config_key === configKey) || null;
+  // The template is chosen on the inputs page; configuration is parsed separately.
+  const id = parseInt(els.templateSelect.value, 10);
+  return state.templates.find((t) => t.id === id) || null;
 }
 
 function refreshTemplateHint() {
   const t = resolveTemplate();
-  if (t) {
-    els.templateHint.textContent = `Template: ${t.name}`;
-    els.templateHint.classList.remove("hint-warn");
-  } else {
-    els.templateHint.textContent = "No template found for this configuration.";
-    els.templateHint.classList.add("hint-warn");
-  }
+  els.templateHint.textContent = t ? `Template: ${t.name}` : "";
+  els.templateHint.classList.remove("hint-warn");
   updateGenerateEnabled();
+}
+
+// --- Configuration preview (parsed pipe model) ------------------------------
+let _cfgTimer = null;
+function scheduleConfigPreview() {
+  clearTimeout(_cfgTimer);
+  _cfgTimer = setTimeout(previewConfig, 350);
+  updateGenerateEnabled();
+}
+
+async function previewConfig() {
+  const cfg = configValue();
+  if (!cfg) {
+    els.configPreview.hidden = true;
+    els.configPreview.innerHTML = "";
+    return;
+  }
+  try {
+    const res = await fetch("/api/config/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: cfg, excel_path: state.excelPath }),
+    });
+    const data = await res.json().catch(() => ({}));
+    els.configPreview.hidden = false;
+    if (!res.ok) {
+      els.configPreview.className = "config-preview cfg-error";
+      els.configPreview.innerHTML =
+        `<strong>Can't parse:</strong> ${escapeHtml(data.detail || "HTTP " + res.status)}`;
+      return;
+    }
+    renderConfigPreview(data);
+  } catch (err) {
+    els.configPreview.hidden = false;
+    els.configPreview.className = "config-preview cfg-error";
+    els.configPreview.textContent = `Preview failed: ${err.message || err}`;
+  }
+}
+
+function renderConfigPreview(data) {
+  els.configPreview.className = "config-preview";
+  const items = data.pipes
+    .map((p) => {
+      const joints = p.joint_count == null ? "" : ` · ${p.joint_count} joints`;
+      const shoe = p.shoe_text ? ` · shoe ${escapeHtml(p.shoe_text)} ft` : "";
+      return `<li><span class="cfg-role">${escapeHtml(p.role)}</span> ${escapeHtml(p.suffix)}
+              <span class="cfg-dim">→ ${escapeHtml(p.sheet)}${joints}${shoe}</span></li>`;
+    })
+    .join("");
+  const warns = (data.warnings || [])
+    .map((w) => `<li class="cfg-warn">${escapeHtml(w)}</li>`)
+    .join("");
+  els.configPreview.innerHTML =
+    `<div class="cfg-title">${data.pipes.length} pipe${data.pipes.length === 1 ? "" : "s"}</div>
+     <ul class="cfg-list">${items}${warns}</ul>`;
 }
 
 function damageCountValue() {
@@ -208,15 +268,18 @@ async function toWorkspace() {
   if (!state.excelPath) return inputsError("Please choose an Excel data file.");
   if (!workingDir) return inputsError("Please provide a working directory.");
 
+  if (!resolveTemplate()) return inputsError("Please choose a report template.");
+
   hide(els.inputsStatus);
   try {
-    await ensureTemplates();
     await ensureCompanies();
   } catch (err) {
     return inputsError(err.message || String(err));
   }
   els.inputsSummary.textContent = `Excel: ${basename(state.excelPath)}  •  Folder: ${workingDir}`;
   showView("workspace");
+  refreshTemplateHint();   // show the chosen template
+  previewConfig();         // refresh the parsed-config preview (uses excelPath)
 }
 
 function inputsError(msg) {
@@ -228,9 +291,10 @@ function inputsError(msg) {
 // --- Generate ---------------------------------------------------------------
 async function generate() {
   const template = resolveTemplate();
-  if (!template) return showError("No template found for this configuration.");
+  if (!template) return showError("Please choose a report template (on the previous screen).");
   const company = resolveCompany();
   if (!company) return showError("Please choose a company (or add one in the Company Manager).");
+  if (!configValue()) return showError("Please enter a configuration.");
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
   if (!workingDir) return showError("Working directory is missing — go back and set one.");
@@ -255,6 +319,7 @@ async function generate() {
         last_wko: els.lastWko.value.trim() || null,
         well_type: els.wellType.value.trim() || null,
         btm_depth: els.btmDepth.value.trim() || null,
+        config: configValue() || null,
       }),
     });
 
@@ -364,7 +429,7 @@ function showSuccess(data) {
 }
 
 function setLoading(loading) {
-  els.generate.disabled = loading || !resolveTemplate() || !resolveCompany();
+  els.generate.disabled = loading || !resolveTemplate() || !resolveCompany() || !configValue();
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 
@@ -756,7 +821,10 @@ function escapeHtml(s) {
 }
 
 // --- Wire up ----------------------------------------------------------------
-els.modeReport.addEventListener("click", () => showView("inputs"));
+els.modeReport.addEventListener("click", () => {
+  showView("inputs");
+  ensureTemplates().catch((err) => inputsError(err.message || String(err)));
+});
 els.modeInterval.addEventListener("click", () => showView("interval"));
 els.modeGhost.addEventListener("click", () => showView("ghost"));
 els.openTemplates.addEventListener("click", () => showView("templates"));
@@ -782,7 +850,8 @@ els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
-els.config.addEventListener("change", refreshTemplateHint);
+els.templateSelect.addEventListener("change", refreshTemplateHint);
+els.configInput.addEventListener("input", scheduleConfigPreview);
 els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 

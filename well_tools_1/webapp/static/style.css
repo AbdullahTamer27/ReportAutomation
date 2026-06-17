@@ -365,6 +365,36 @@ button:disabled { opacity: 0.5; cursor: default; }
 .note-fix   { color: var(--info-fg); }
 .note-info  { color: var(--text-dim); opacity: 0.85; }
 
+/* ===== Configuration preview (parsed pipe model) ===== */
+.config-preview {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--info-bg);
+  border: 1px solid var(--info-bd);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.config-preview.cfg-error {
+  background: var(--error-bg);
+  border-color: var(--error-bd);
+  color: var(--error-fg);
+}
+.cfg-title {
+  font-weight: 700;
+  color: var(--info-fg);
+  margin-bottom: 8px;
+}
+.cfg-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.cfg-list li { line-height: 1.45; color: var(--text); }
+.cfg-role {
+  display: inline-block;
+  min-width: 84px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.cfg-dim { color: var(--muted); }
+.cfg-warn { color: #fbbf24; }
+
 /* "(optional)" marker inside a field label */
 .opt {
   text-transform: none;

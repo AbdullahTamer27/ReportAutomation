@@ -53,6 +53,8 @@ from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  #
 from .interval import generate_raw_data, IntervalInputError  # noqa: E402
 from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
+from well_tools.report.pipe_config import build_pipe_model, ConfigParseError  # noqa: E402
+
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -81,6 +83,7 @@ class GenerateRequest(BaseModel):
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
     company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
     include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
+    config: str | None = Field(None, description="Configuration string for the universal master template, e.g. 4.5x3.5TBG-7LNR-9.625")
     log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag (normalized to DD-Mon-YYYY)")
     orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}} (DD-Mon-YYYY)")
     last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}} (DD-Mon-YYYY)")
@@ -137,6 +140,30 @@ class CompanyRegisterResponse(BaseModel):
     name: str
     logo_path: str
     created: bool   # True = new, False = updated existing
+
+
+class ConfigPreviewRequest(BaseModel):
+    config: str = Field(..., description="Configuration string, e.g. 4.5x3.5TBG-7LNR-9.625")
+    excel_path: str | None = Field(None, description="Optional workbook to read shoe depth / joint counts")
+
+
+class PipeOut(BaseModel):
+    index: int
+    role: str
+    sizes: list[float]
+    tapered: bool
+    type: str
+    name: str
+    suffix: str
+    sheet: str
+    joint_count: int | None = None
+    shoe: float | None = None
+    shoe_text: str = ""
+
+
+class ConfigPreviewResponse(BaseModel):
+    pipes: list[PipeOut]
+    warnings: list[str]
 
 
 class IntervalRequest(BaseModel):
@@ -234,6 +261,21 @@ def interval_generate(req: IntervalRequest):
         logger.exception("Interval generation failed")
         raise HTTPException(status_code=500, detail=f"Interval generation failed: {e}")
     return IntervalResponse(**result)
+
+
+@app.post("/api/config/preview", response_model=ConfigPreviewResponse)
+def config_preview(req: ConfigPreviewRequest):
+    """Parse a configuration string into the pipe model (and, if an Excel path is
+    given, each pipe's shoe depth + joint count) so the UI can show the mapping
+    before generating. Read-only."""
+    try:
+        result = build_pipe_model(req.config, req.excel_path)
+    except ConfigParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Config preview failed")
+        raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
+    return ConfigPreviewResponse(**result)
 
 
 @app.post("/api/ghost/merge", response_model=GhostResponse)
@@ -443,6 +485,26 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     is_weatherford = (company.name or "").strip().lower() == "weatherford"
     conditional_lines = {"{{weatherford_corr}}": is_weatherford}
 
+    # Universal master template: parse the configuration into the pipe model and
+    # add each pipe's metadata tags. Absent here ⇒ legacy per-config template.
+    pipe_model = None
+    text_fields_quiet = None
+    if req.config and req.config.strip():
+        try:
+            pm = build_pipe_model(req.config, req.excel_path, review=on_review)
+        except ConfigParseError as e:
+            raise HTTPException(status_code=400, detail=f"Configuration: {e}")
+        pipe_model = pm["pipes"]
+        pipe_tags = set()
+        for p in pipe_model:
+            role = p["role"]
+            for key, val in (("name", p["name"]), ("suffix", p["suffix"]), ("shoe", p["shoe_text"])):
+                tag = f"{{{{{role}_{key}}}}}"
+                text_fields[tag] = val
+                pipe_tags.add(tag)
+        # Auto-derived pipe tags: don't warn if a template doesn't use every variant.
+        text_fields_quiet = pipe_tags
+
     try:
         output_path = build_automation_report(
             word_template_path=template.file_path,
@@ -455,6 +517,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             company_name=company.name,
             text_fields=text_fields,
             conditional_lines=conditional_lines,
+            pipe_model=pipe_model,
+            text_fields_quiet=text_fields_quiet,
             progress=on_progress,
             review=on_review,
         )

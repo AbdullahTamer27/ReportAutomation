@@ -54,7 +54,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                             review=None, damage_count=0,
                             include_disclaimer=False, company_logo_path=None,
                             company_name=None, text_fields=None,
-                            conditional_lines=None):
+                            conditional_lines=None, pipe_model=None,
+                            text_fields_quiet=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -69,6 +70,9 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     in the document (e.g. {{well_name}}, {{log_date}}, {{orig_comp}}, {{last_wko}}).
     `conditional_lines` is a {tag: keep?} map: paragraphs containing the tag are
     kept (tag stripped) when keep is True, else removed (e.g. {{weatherford_corr}}).
+    `pipe_model` (universal master template) is the ordered list of present pipes;
+    when given, per-pipe sections for absent pipes are removed and the summary is
+    filled from the model. When None, behaves as the legacy per-config template.
     """
     def log(msg):
         if progress:
@@ -81,12 +85,27 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(working_dir, f"Automation_Report_{stamp}.docx")
 
-    # ---- 1) Tables: template -> output ----
+    # ---- 0) Universal master template: keep present pipe sections, drop the rest ----
+    if pipe_model is not None:
+        from .pipe_config import ROLE_NAMES
+        present_roles = [p["role"] for p in pipe_model]
+        log(f"Preparing pipe sections (present: {', '.join(present_roles)})…")
+        from . import pipe_sections
+        pipe_sections.apply_pipe_sections(
+            word_template_path, output_path, present_roles, ROLE_NAMES,
+            progress=log, review=review,
+        )
+        tables_src = output_path   # subsequent passes operate on the prepared output
+    else:
+        tables_src = word_template_path
+
+    # ---- 1) Tables: tables_src -> output ----
     log("Filling tables from workbook…")
     from . import tables
     tables.fill_report_tables(
-        word_template_path, excel_data_path, output_path,
-        highest_top_n=highest_top_n, progress=log, review=review,
+        tables_src, excel_data_path, output_path,
+        highest_top_n=highest_top_n, pipe_model=pipe_model,
+        progress=log, review=review,
     )
 
     # ---- 1.5) Expand damage blocks (N image-sections) on the output ----
@@ -119,7 +138,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     if text_fields:
         log("Filling well-metadata text tags…")
         from . import text_fields as tf
-        tf.apply_text_fields(output_path, text_fields, progress=log, review=review)
+        tf.apply_text_fields(output_path, text_fields, progress=log, review=review,
+                             quiet_tags=text_fields_quiet)
 
     # ---- 2.7) Company-conditional lines ({{weatherford_corr}}, …) ----
     if conditional_lines:
