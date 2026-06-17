@@ -641,7 +641,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .layout {
   display: flex;
   gap: 22px;
-  align-items: flex-start;
+  align-items: stretch;   /* both columns share the taller column's height */
   width: 100%;
   max-width: 1180px;
   flex-wrap: wrap;
