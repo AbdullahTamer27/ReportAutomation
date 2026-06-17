@@ -21,10 +21,36 @@ from docx.oxml.ns import qn
 
 _W_P = qn("w:p")
 _W_T = qn("w:t")
+_W_TC = qn("w:tc")
 
 
 def _para_text(p):
     return "".join(t.text or "" for t in p.iter(_W_T))
+
+
+def _remove_absent_pipe_lines(body, absent_roles):
+    """Delete any body paragraph still referencing an absent pipe's tag
+    (e.g. a conclusion line with {{seventhPipe_highest_grade}}). Present pipes'
+    tags are filled later, so they never match here. Returns #removed."""
+    if not absent_roles:
+        return 0
+    prefixes = tuple("{{%s_" % r for r in absent_roles)
+    removed = 0
+    for p in list(body.iter(_W_P)):
+        txt = _para_text(p)
+        if not any(pre in txt for pre in prefixes):
+            continue
+        parent = p.getparent()
+        if parent is None:
+            continue
+        # Don't leave a table cell with zero paragraphs (invalid OOXML).
+        if parent.tag == _W_TC and len(parent.findall(_W_P)) == 1:
+            for t in p.iter(_W_T):
+                t.text = ""
+        else:
+            parent.remove(p)
+        removed += 1
+    return removed
 
 
 def _process_role(body, role, keep):
@@ -77,6 +103,12 @@ def apply_pipe_sections(template_path, output_path, present_roles, all_roles,
         if ranges:
             found_any = True
             (kept_roles if keep else removed_roles).append(role)
+
+    # Remove standalone lines (e.g. conclusions) that reference an absent pipe.
+    absent = [r for r in all_roles if r not in present]
+    pruned = _remove_absent_pipe_lines(body, absent)
+    if pruned:
+        log(f"Removed {pruned} line(s) referencing absent pipe(s).")
 
     doc.save(output_path)
 
