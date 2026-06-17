@@ -656,7 +656,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   border-radius: var(--radius);
   padding: 20px 22px 24px;
   box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.75);
-  max-height: calc(180vh - 80px);
+  max-height: calc(160vh - 80px);
   display: flex;
   flex-direction: column;
 }
