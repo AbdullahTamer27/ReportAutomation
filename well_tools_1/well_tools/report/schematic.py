@@ -88,12 +88,13 @@ def parse_schematic(pdf_path):
         else:
             warnings.append(f"Original completion date '{m.group(1)}' is not a valid date.")
 
-    # Latest workover date (the trailing '#4' run number is ignored).
-    m = re.search(r"LATEST\s+WKO\s*:\s*" + _DATE, text)
+    # Latest workover: date plus the trailing '#N' run number, which is the count
+    # of workovers done (e.g. 'LATEST WKO :2013/09/06 #4' -> '06-Sep-2013 #4').
+    m = re.search(r"LATEST\s+WKO\s*:\s*" + _DATE + r"(?:\s*#\s*(\d+))?", text)
     if m:
         d = _fmt_date(m.group(1))
         if d:
-            fields["last_wko"] = d
+            fields["last_wko"] = f"{d} #{m.group(2)}" if m.group(2) else d
         else:
             warnings.append(f"Last workover date '{m.group(1)}' is not a valid date.")
 

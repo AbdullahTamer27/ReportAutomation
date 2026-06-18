@@ -55,6 +55,7 @@ const els = {
   loadSchematic: $("loadSchematic"),
   schematicHint: $("schematicHint"),
   wellName: $("wellName"),
+  fieldName: $("fieldName"),
   wellType: $("wellType"),
   btmDepth: $("btmDepth"),
   logDate: $("logDate"),
@@ -405,6 +406,7 @@ async function generate() {
         last_wko: els.lastWko.value.trim() || null,
         well_type: els.wellType.value.trim() || null,
         btm_depth: els.btmDepth.value.trim() || null,
+        field: els.fieldName.value.trim() || null,
         config: configValue() || null,
       }),
     });

@@ -89,6 +89,7 @@ class GenerateRequest(BaseModel):
     last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}} (DD-Mon-YYYY)")
     well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
+    field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
 
 
 class GenerateResponse(BaseModel):
@@ -508,6 +509,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         "{{well_name}}": _opt(req.well_name, "Well name"),
         "{{well_type}}": _opt(req.well_type, "Well type"),
         "{{btm_depth}}": _opt(req.btm_depth, "Bottom depth"),
+        "{{field}}": _opt(req.field, "Field"),
         "{{log_date}}": _opt_date(req.log_date, "Log date"),
         "{{orig_comp}}": _opt_date(req.orig_comp, "Original completion"),
         "{{last_wko}}": _opt_date(req.last_wko, "Last workover"),
