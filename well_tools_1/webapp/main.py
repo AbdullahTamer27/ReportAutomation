@@ -53,6 +53,8 @@ from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  #
 from .interval import generate_raw_data, IntervalInputError  # noqa: E402
 from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
+from well_tools.report.pipe_config import build_pipe_model, ConfigParseError  # noqa: E402
+
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -81,11 +83,13 @@ class GenerateRequest(BaseModel):
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
     company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
     include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
+    config: str | None = Field(None, description="Configuration string for the universal master template, e.g. 4.5x3.5TBG-7LNR-9.625")
     log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag (normalized to DD-Mon-YYYY)")
     orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}} (DD-Mon-YYYY)")
     last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}} (DD-Mon-YYYY)")
     well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
+    field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
 
 
 class GenerateResponse(BaseModel):
@@ -137,6 +141,41 @@ class CompanyRegisterResponse(BaseModel):
     name: str
     logo_path: str
     created: bool   # True = new, False = updated existing
+
+
+class ConfigPreviewRequest(BaseModel):
+    config: str = Field(..., description="Configuration string, e.g. 4.5x3.5TBG-7LNR-9.625")
+    excel_path: str | None = Field(None, description="Optional workbook to read shoe depth / joint counts")
+
+
+class PipeOut(BaseModel):
+    index: int
+    role: str
+    sizes: list[float]
+    tapered: bool
+    type: str
+    name: str
+    suffix: str
+    sheet: str
+    joint_count: int | None = None
+    shoe: float | None = None
+    shoe_text: str = ""
+    sheet_found: bool | None = None
+    highest_severity: str = ""
+
+
+class ConfigPreviewResponse(BaseModel):
+    pipes: list[PipeOut]
+    warnings: list[str]
+
+
+class SchematicRequest(BaseModel):
+    pdf_path: str = Field(..., description="Absolute path to the well-schematic PDF")
+
+
+class SchematicResponse(BaseModel):
+    fields: dict[str, str]   # only the keys found, among well_name/well_type/orig_comp/last_wko
+    warnings: list[str]
 
 
 class IntervalRequest(BaseModel):
@@ -234,6 +273,43 @@ def interval_generate(req: IntervalRequest):
         logger.exception("Interval generation failed")
         raise HTTPException(status_code=500, detail=f"Interval generation failed: {e}")
     return IntervalResponse(**result)
+
+
+@app.post("/api/config/preview", response_model=ConfigPreviewResponse)
+def config_preview(req: ConfigPreviewRequest):
+    """Parse a configuration string into the pipe model (and, if an Excel path is
+    given, each pipe's shoe depth + joint count) so the UI can show the mapping
+    before generating. Read-only."""
+    try:
+        result = build_pipe_model(req.config, req.excel_path)
+    except ConfigParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Config preview failed")
+        raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
+    return ConfigPreviewResponse(**result)
+
+
+@app.post("/api/schematic/parse", response_model=SchematicResponse)
+def schematic_parse(req: SchematicRequest):
+    """Extract well metadata (name, type, original-completion / last-workover
+    dates) from a Well Cross Section Plot PDF so the UI can pre-fill the optional
+    inputs for the user to review before generating. Read-only."""
+    if not req.pdf_path or not os.path.isfile(req.pdf_path):
+        raise HTTPException(status_code=400, detail="PDF not found at that path.")
+    if not req.pdf_path.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please choose a .pdf file.")
+    try:
+        from well_tools.report.schematic import parse_schematic
+        result = parse_schematic(req.pdf_path)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Schematic parse failed")
+        raise HTTPException(status_code=500, detail=f"Could not parse the schematic: {e}")
+    if not result["fields"]:
+        result["warnings"].append(
+            "No recognizable fields found — is this a standard Well Cross Section Plot PDF?"
+        )
+    return SchematicResponse(**result)
 
 
 @app.post("/api/ghost/merge", response_model=GhostResponse)
@@ -404,20 +480,74 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         logger.info("[review]   %s", msg)
         review_notes.append(str(msg))
 
-    # Use the well name for the output filename if provided (engine output_path).
-    output_path = _output_path_for(req.working_dir, req.well_name)
+    # Output filename: wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx
+    output_path = os.path.join(
+        req.working_dir,
+        _report_filename(req.well_name, _normalize_date(req.log_date), company.name),
+    )
 
-    # Plain-text tags replaced anywhere in the document (run-preserving).
-    # Date fields are normalized to DD-Mon-YYYY (e.g. 09-Sep-2020); non-dates
-    # such as "N/A" pass through unchanged.
+    # Plain-text tags replaced anywhere in the document (run-preserving). These
+    # fields are OPTIONAL (only configuration, company, and number of damages are
+    # required): a blank gets a default value and a warning in the report notes.
+    # Date fields are normalized to DD-Mon-YYYY; non-dates ("N/A") pass through.
+    OPTIONAL_DEFAULT = "N/A"
+    defaulted = []
+
+    def _opt(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return str(value)
+
+    def _opt_date(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return _normalize_date(value)
+
     text_fields = {
-        "{{well_name}}": req.well_name or "",
-        "{{well_type}}": req.well_type or "",
-        "{{btm_depth}}": req.btm_depth or "",
-        "{{log_date}}": _normalize_date(req.log_date),
-        "{{orig_comp}}": _normalize_date(req.orig_comp),
-        "{{last_wko}}": _normalize_date(req.last_wko),
+        "{{well_name}}": _opt(req.well_name, "Well name"),
+        "{{well_type}}": _opt(req.well_type, "Well type"),
+        "{{btm_depth}}": _opt(req.btm_depth, "Bottom depth"),
+        "{{field}}": _opt(req.field, "Field"),
+        "{{log_date}}": _opt_date(req.log_date, "Log date"),
+        "{{orig_comp}}": _opt_date(req.orig_comp, "Original completion"),
+        "{{last_wko}}": _opt_date(req.last_wko, "Last workover"),
+        # Delivery date = today's date, formatted like the other dates. Auto-filled.
+        "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
     }
+    if defaulted:
+        review_notes.append(
+            f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
+        )
+    # Auto-derived tags never nag if a template doesn't use them.
+    text_fields_quiet = {"{{delivery_date}}"}
+
+    # Company-conditional lines: kept only when that company is chosen.
+    is_weatherford = (company.name or "").strip().lower() == "weatherford"
+    conditional_lines = {"{{weatherford_corr}}": is_weatherford}
+
+    # Universal master template: parse the configuration into the pipe model and
+    # add each pipe's metadata tags. Absent here ⇒ legacy per-config template.
+    pipe_model = None
+    if req.config and req.config.strip():
+        from well_tools.report.pipe_config import sizes_list_string  # noqa: E402
+        try:
+            pm = build_pipe_model(req.config, req.excel_path, review=on_review)
+        except ConfigParseError as e:
+            raise HTTPException(status_code=400, detail=f"Configuration: {e}")
+        pipe_model = pm["pipes"]
+        for p in pipe_model:
+            role = p["role"]
+            for key, val in (("name", p["name"]), ("suffix", p["suffix"]),
+                             ("shoe", p["shoe_text"]), ("highest_grade", p["highest_severity"])):
+                tag = f"{{{{{role}_{key}}}}}"
+                text_fields[tag] = val
+                text_fields_quiet.add(tag)
+        # Casing / liner / tubing size lists (sizes only, largest first).
+        for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
+            text_fields[tag] = sizes_list_string(pipe_model, code)
+            text_fields_quiet.add(tag)
 
     try:
         output_path = build_automation_report(
@@ -430,6 +560,9 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             company_logo_path=company.logo_path,
             company_name=company.name,
             text_fields=text_fields,
+            conditional_lines=conditional_lines,
+            pipe_model=pipe_model,
+            text_fields_quiet=text_fields_quiet,
             progress=on_progress,
             review=on_review,
         )
@@ -501,6 +634,18 @@ def _output_path_for(working_dir: str, well_name):
     if not stem:
         return None
     return os.path.join(working_dir, f"{stem}_report.docx")
+
+
+def _report_filename(well_name, log_date_disp, company_name):
+    """wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx (blanks → 'NA')."""
+    parts = [
+        (well_name or "").strip() or "NA",
+        (log_date_disp or "").strip() or "NA",
+        "EPDT", "RIGLESS", "REPORT",
+        (company_name or "").strip() or "NA",
+    ]
+    stem = _safe_filename("_".join(parts)).replace(" ", "_")
+    return f"{stem}.docx"
 
 
 @app.post("/api/preview/{run_id}", response_model=PreviewResponse)

@@ -1,4 +1,5 @@
 pandas
 openpyxl
 python-docx
+matplotlib    # per-pipe metal-loss pie charts (report/charts.py)
 tkinterdnd2   ; optional — drag & drop. App works without it (buttons only).

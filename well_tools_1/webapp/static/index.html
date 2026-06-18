@@ -198,6 +198,20 @@
           </div>
         </section>
 
+        <section class="field">
+          <label for="templateSelect">Report template</label>
+          <select id="templateSelect"></select>
+          <p id="templatePickHint" class="hint"></p>
+        </section>
+
+        <section class="field">
+          <label>Well schematic PDF <span class="opt">(optional)</span></label>
+          <div class="picker">
+            <button id="loadSchematic" type="button" class="secondary">Load from schematic PDF…</button>
+          </div>
+          <p id="schematicHint" class="hint">Pulls well name, type, and completion/workover dates from a Well Cross Section Plot PDF into the optional fields — review before generating.</p>
+        </section>
+
         <button id="toWorkspace" type="button" class="primary">Continue</button>
         <div id="inputsStatus" class="status" hidden></div>
       </main>
@@ -254,41 +268,18 @@
           <p id="inputsSummary" class="subtitle"></p>
         </header>
 
+        <!-- Required inputs -->
         <section class="field">
-          <label for="wellName">Well name</label>
-          <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
-        </section>
-
-        <div class="field-row">
-          <section class="field">
-            <label for="wellType">Well type</label>
-            <input type="text" id="wellType" class="text-input" placeholder="e.g. Oil producer" />
-          </section>
-          <section class="field">
-            <label for="btmDepth">Bottom depth</label>
-            <input type="text" id="btmDepth" class="text-input" placeholder="e.g. 7233 ft" />
-          </section>
-        </div>
-
-        <div class="field-row">
-          <section class="field">
-            <label for="logDate">Log date</label>
-            <input type="text" id="logDate" class="text-input" placeholder="e.g. 09-Sep-2020" />
-          </section>
-          <section class="field">
-            <label for="origComp">Original completion</label>
-            <input type="text" id="origComp" class="text-input" placeholder="e.g. 26-Apr-1988" />
-          </section>
-        </div>
-
-        <section class="field">
-          <label for="lastWko">Last workover</label>
-          <input type="text" id="lastWko" class="text-input" placeholder="e.g. 03-Mar-2024 (or N/A)" />
-        </section>
-
-        <section class="field">
-          <label for="configSelect">Configuration</label>
-          <select id="configSelect"></select>
+          <label for="configInput">Configuration</label>
+          <input type="text" id="configInput" class="text-input" list="configPresets"
+                 placeholder="e.g. 4.5x3.5TBG-7LNR-9.625-13.375-18.625" autocomplete="off" />
+          <datalist id="configPresets">
+            <option value="4.5TBG-7-9.625-13.375"></option>
+            <option value="4.5TBG-7-9.625-13.375-18.625"></option>
+            <option value="4.5x3.5TBG-7-9.625-13.375"></option>
+            <option value="4.5x3.5TBG-7LNR-9.625-13.375-18.625"></option>
+          </datalist>
+          <div id="configPreview" class="config-preview" hidden></div>
         </section>
 
         <section class="field">
@@ -301,6 +292,49 @@
           <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
         </section>
 
+        <p id="templateHint" class="hint"></p>
+        <p id="companyHint" class="hint"></p>
+
+        <!-- Optional details -->
+        <p class="section-label">Optional details</p>
+
+        <section class="field">
+          <label for="wellName">Well name <span class="opt">(optional)</span></label>
+          <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
+        </section>
+
+        <div class="field-row">
+          <section class="field">
+            <label for="fieldName">Field <span class="opt">(optional)</span></label>
+            <input type="text" id="fieldName" class="text-input" placeholder="e.g. Zuluf" />
+          </section>
+          <section class="field">
+            <label for="wellType">Well type <span class="opt">(optional)</span></label>
+            <input type="text" id="wellType" class="text-input" placeholder="e.g. Oil producer" />
+          </section>
+        </div>
+
+        <section class="field">
+          <label for="btmDepth">Bottom depth <span class="opt">(optional)</span></label>
+          <input type="text" id="btmDepth" class="text-input" placeholder="e.g. 7233 ft" />
+        </section>
+
+        <div class="field-row">
+          <section class="field">
+            <label for="logDate">Log date <span class="opt">(optional)</span></label>
+            <input type="text" id="logDate" class="text-input" placeholder="e.g. 09-Sep-2020" />
+          </section>
+          <section class="field">
+            <label for="origComp">Original completion <span class="opt">(optional)</span></label>
+            <input type="text" id="origComp" class="text-input" placeholder="e.g. 26-Apr-1988" />
+          </section>
+        </div>
+
+        <section class="field">
+          <label for="lastWko">Last workover <span class="opt">(optional)</span></label>
+          <input type="text" id="lastWko" class="text-input" placeholder="e.g. 03-Mar-2024 (or N/A)" />
+        </section>
+
         <section class="field">
           <label class="checkbox-row">
             <input type="checkbox" id="includeDisclaimer" />
@@ -308,18 +342,16 @@
           </label>
         </section>
 
-        <p id="templateHint" class="hint"></p>
-        <p id="companyHint" class="hint"></p>
-
         <button id="generate" type="button" class="primary">Generate Report</button>
         <div id="status" class="status" hidden></div>
       </main>
 
       <aside id="previewPanel" class="preview" hidden>
         <header class="preview-header">
-          <h2>Preview</h2>
+          <h2>Preview and notes</h2>
           <span id="previewMeta" class="muted"></span>
         </header>
+        <div id="previewResult"></div>
         <div id="previewBody" class="preview-body"></div>
       </aside>
     </div>

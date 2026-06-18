@@ -17,6 +17,11 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 wv_data,  wv_bins,  wv_hidden  = collect_all("webview")
 fitz_data, fitz_bins, fitz_hidden = collect_all("fitz")
 
+# matplotlib renders the per-pipe metal-loss pie charts (well_tools/report/
+# charts.py). Collect its mpl-data (fonts, rcParams) so the Agg backend works
+# in the frozen build — without this the EXE crashes the first time it draws.
+mpl_data, mpl_bins, mpl_hidden = collect_all("matplotlib")
+
 # pywin32 system DLLs (pythoncom3X.dll, pywintypes3X.dll) must be in the
 # bundle root so Windows COM infrastructure can find them at run-time.
 # Without this, docx2pdf silently fails when launched from the frozen EXE.
@@ -33,7 +38,7 @@ block_cipher = None
 a = Analysis(
     ["webapp/app.py"],
     pathex=["."],                    # well_tools_1/ — finds both packages
-    binaries=wv_bins + fitz_bins + _pywin32_dlls,
+    binaries=wv_bins + fitz_bins + mpl_bins + _pywin32_dlls,
     datas=[
         # Static frontend served by FastAPI
         ("webapp/static",           "webapp/static"),
@@ -41,9 +46,9 @@ a = Analysis(
         ("webapp/data/templates",   "webapp/data/templates"),
         # Bundled company-logos folder (manifest.json + logo images)
         ("webapp/data/companies",   "webapp/data/companies"),
-    ] + wv_data + fitz_data,
+    ] + wv_data + fitz_data + mpl_data,
     hiddenimports=(
-        wv_hidden + fitz_hidden
+        wv_hidden + fitz_hidden + mpl_hidden
         + collect_submodules("well_tools")   # engine + core
         + collect_submodules("sqlalchemy")
         + [
@@ -87,7 +92,7 @@ a = Analysis(
     runtime_hooks=["rthook_pywin32.py"],
     excludes=[
         "tkinter", "_tkinter",      # desktop Tkinter UI — not used by the web app
-        "matplotlib", "scipy",
+        "scipy",                    # matplotlib draws the pies but never needs scipy
         "IPython", "notebook",
     ],
     win_no_prefer_redirects=False,

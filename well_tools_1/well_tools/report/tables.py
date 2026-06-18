@@ -330,46 +330,84 @@ def worst_joint(ws, top_n, table_name=None, review=None):
     return None
 
 
+def _fill_summary_row(row, vals, rev, suffix=None):
+    """Write a summary data row: optional col-0 pipe suffix, then Max Loss (%),
+    Grade (+ colour), Max Loss Depth (ft) from the pipe's worst joint `vals`
+    (which may be None — then only the suffix is written)."""
+    cells = row.cells
+    if suffix is not None:
+        set_cell_text(cells[0], suffix)                                    # pipe name
+    if vals is None:
+        return
+    set_cell_text(cells[1], fmt(vals[MAX_LOSS_IDX], MAX_LOSS_IDX))         # metal loss
+    grade = str(vals[GRADE_IDX]).strip()
+    set_cell_text(cells[2], grade)                                         # grade
+    if grade in GRADE_COLORS:
+        set_cell_bg(cells[2], GRADE_COLORS[grade])                         # + bg colour
+    set_cell_text(cells[3], fmt(vals[MAX_LOSS_DEPTH_IDX], MAX_LOSS_DEPTH_IDX))
+
+
 def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
-                       progress=None, review=None):
+                       progress=None, review=None, pipe_model=None):
     """Fill the cross-pipe summary table in place.
 
-    Layout (per the template): col 0 = pipe name (left untouched), col 1 = Max
-    Loss (%), col 2 = Grade (+ background color), col 3 = Max Loss Depth (ft).
+    Columns: 0 = pipe name, 1 = Max Loss (%), 2 = Grade (+ colour), 3 = Max Loss
+    Depth (ft). Row mapping is bottom-anchored: the FIRST pipe fills the LAST data
+    row, the second the second-to-last, and so on.
 
-    Row mapping is bottom-anchored: the FIRST pipe (in document/tag-appearance
-    order) fills the LAST data row, the second pipe the second-to-last, and so on.
-    No rows are added or removed; column 0 is never written."""
+    Universal mode (`pipe_model` given): column 0 is filled with each pipe's
+    `suffix`, and the unused top rows are deleted (master template has a fixed 7
+    rows). Legacy mode: column 0 is left untouched and no rows are removed."""
     log = progress or print
     rev = review or (lambda m: None)
 
     data_rows = table.rows[1:]   # row 0 is the header (holds the {{SUMMARY}} tag)
-    if len(data_rows) != len(pipe_order):
-        rev(f"⚠ Summary: table has {len(data_rows)} data row(s) but {len(pipe_order)} "
-            f"pipe(s) — filling the last {min(len(data_rows), len(pipe_order))}.")
-
+    nrows = len(data_rows)
     filled = 0
-    for i, sheet_name in enumerate(pipe_order):
-        ri = len(data_rows) - 1 - i   # first pipe -> last row
-        if ri < 0:
-            break
-        row = data_rows[ri]
-        if sheet_name not in sheets:
-            rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — row left blank")
-            continue
-        vals = worst_joint(wb[sheet_name], highest_top_n,
-                           table_name=f"summary[{sheet_name}]", review=rev)
-        if vals is None:
-            rev(f"⚠ Summary: '{sheet_name}' has no valid joint — row left blank")
-            continue
-        cells = row.cells
-        set_cell_text(cells[1], fmt(vals[MAX_LOSS_IDX], MAX_LOSS_IDX))     # metal loss
-        grade = str(vals[GRADE_IDX]).strip()
-        set_cell_text(cells[2], grade)                                     # grade
-        if grade in GRADE_COLORS:
-            set_cell_bg(cells[2], GRADE_COLORS[grade])                     # + bg color
-        set_cell_text(cells[3], fmt(vals[MAX_LOSS_DEPTH_IDX], MAX_LOSS_DEPTH_IDX))
-        filled += 1
+
+    if pipe_model is not None:
+        # Dynamic, like the other tables: the template has 1 header + 1 styled
+        # data row, which we clone once per pipe. Cloning appends to the bottom,
+        # so iterating in reverse puts the FIRST pipe in the LAST row.
+        if len(table.rows) < 2:
+            rev("⚠ Summary: needs a header row + one data row to clone — nothing filled.")
+            _strip_tag(table.rows[0].cells[0], SUMMARY_TAG)
+            return 0
+        template_row = table.rows[1]
+        for p in reversed(pipe_model):
+            new_row = clone_row(table, template_row)
+            for c in new_row.cells:
+                reset_cell(c)
+            sheet_name = p["sheet"]
+            vals = None
+            if sheet_name in sheets:
+                vals = worst_joint(wb[sheet_name], highest_top_n,
+                                   table_name=f"summary[{sheet_name}]", review=rev)
+                if vals is None:
+                    rev(f"⚠ Summary: '{sheet_name}' has no valid joint — data left blank")
+            else:
+                rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — data left blank")
+            _fill_summary_row(new_row, vals, rev, suffix=p.get("suffix", ""))
+            filled += 1
+        template_row._tr.getparent().remove(template_row._tr)   # drop the template row
+    else:
+        if nrows != len(pipe_order):
+            rev(f"⚠ Summary: table has {nrows} data row(s) but {len(pipe_order)} "
+                f"pipe(s) — filling the last {min(nrows, len(pipe_order))}.")
+        for i, sheet_name in enumerate(pipe_order):
+            ri = nrows - 1 - i        # first pipe → last row
+            if ri < 0:
+                break
+            if sheet_name not in sheets:
+                rev(f"⚠ Summary: sheet '{sheet_name}' not in workbook — row left blank")
+                continue
+            vals = worst_joint(wb[sheet_name], highest_top_n,
+                               table_name=f"summary[{sheet_name}]", review=rev)
+            if vals is None:
+                rev(f"⚠ Summary: '{sheet_name}' has no valid joint — row left blank")
+                continue
+            _fill_summary_row(data_rows[ri], vals, rev, suffix=None)
+            filled += 1
 
     _strip_tag(table.rows[0].cells[0], SUMMARY_TAG)
     log(f"OK summary: {filled} pipe(s) filled")
@@ -378,7 +416,8 @@ def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
 
 # ---------------- Orchestration ----------------
 def fill_report_tables(template_path, workbook_path, output_path,
-                       highest_top_n=HIGHEST_TOP_N, progress=None, review=None):
+                       highest_top_n=HIGHEST_TOP_N, progress=None, review=None,
+                       pipe_model=None):
     """Fill all tagged tables in `template_path` from `workbook_path` and save to
     `output_path`. Returns a result dict: {filled, deleted, used, warnings}.
 
@@ -460,12 +499,14 @@ def fill_report_tables(template_path, workbook_path, output_path,
                 deleted += 1
                 rev(f"⚠ {tag}: sheet not found in workbook → table removed")
 
-    # Summary table(s): worst joint per pipe, in document (tag-appearance) order.
-    # fill_summary_table maps the first pipe to the LAST row (see its docstring).
+    # Summary table(s): worst joint per pipe. With a pipe_model (universal master
+    # template) column 0 = pipe suffix and unused rows are trimmed; otherwise the
+    # legacy bottom-anchored fill keyed by tag-appearance order.
+    summary_order = [p["sheet"] for p in pipe_model] if pipe_model else pipe_order
     for st in summary_tables:
         try:
-            fill_summary_table(st, wb, sheets, pipe_order, highest_top_n,
-                               progress=log, review=rev)
+            fill_summary_table(st, wb, sheets, summary_order, highest_top_n,
+                               progress=log, review=rev, pipe_model=pipe_model)
             filled += 1
         except Exception as e:  # noqa: BLE001
             rev(f"❌ summary: failed to fill table — {e}")

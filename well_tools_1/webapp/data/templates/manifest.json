@@ -1,87 +1,10 @@
 {
   "templates": [
     {
-      "name": "4.5 – 4.5 – 7 – 9 – 13 – 18",
+      "name": "ePDT",
       "damage_count": 0,
-      "config_key": "4.5-4.5-7-9-13-18",
-      "filename": "sample_7_4p5-4p5-7-9-13-18.docx",
-      "placeholders": []
-    },
-    {
-      "name": "4.5 – 7 – 9 – 13",
-      "damage_count": 0,
-      "config_key": "4.5-7-9-13",
-      "filename": "sample_3_4p5-7-9-13.docx",
-      "placeholders": []
-    },
-    {
-      "name": "Sample 4-joint 4.5-7-9-13-18",
-      "damage_count": 4,
-      "config_key": "4.5-7-9-13-18",
-      "filename": "C:\\Users\\asuus\\Desktop\\GOWell\\ReportAutomation\\well_tools\\ReportAutomation\\well_tools_1\\webapp\\data\\templates\\sample_4_4p5-7-9-13-18.docx",
-      "placeholders": [
-        "{{proc}}",
-        "{{wh}}",
-        "{{joints_3LinerPipe}}",
-        "{{highest_3LinerPipe}}"
-      ]
-    },
-    {
-      "name": "4.5 – 7 – 9 – 13 – 18",
-      "damage_count": 0,
-      "config_key": "4.5-7-9-13-18",
-      "filename": "sample_6_4p5-7-9-13-18.docx",
-      "placeholders": []
-    },
-    {
-      "name": "4.5×3.5 – 4.5 – 7 – 9 – 13 – 18",
-      "damage_count": 0,
-      "config_key": "4.5×3.5-4.5-7-9-13-18",
-      "filename": "sample_8_4p5X3p5-4p5-7-9-13-18.docx",
-      "placeholders": []
-    },
-    {
-      "name": "4.5×3.5 – 7 – 9 – 13",
-      "damage_count": 0,
-      "config_key": "4.5×3.5-7-9-13",
-      "filename": "sample_2_4p5X3p5-7-9-13.docx",
-      "placeholders": []
-    },
-    {
-      "name": "4.5×3.5 – 7 – 9 – 13 – 18",
-      "damage_count": 0,
-      "config_key": "4.5×3.5-7-9-13-18",
-      "filename": "sample_5_4p5X3p5-7-9-13-18.docx",
-      "placeholders": []
-    },
-    {
-      "name": "Sample 6-joint 5.5-9-13-18",
-      "damage_count": 6,
-      "config_key": "5.5-9-13-18",
-      "filename": "C:\\Users\\asuus\\Desktop\\GOWell\\ReportAutomation\\well_tools\\ReportAutomation\\well_tools_1\\webapp\\data\\templates\\sample_6_5p5-9-13-18.docx",
-      "placeholders": [
-        "{{proc}}",
-        "{{tempgr}}",
-        "{{joints_3LinerPipe}}",
-        "{{highest_3LinerPipe}}"
-      ]
-    },
-    {
-      "name": "Sample 2-joint 7-13",
-      "damage_count": 2,
-      "config_key": "7-13",
-      "filename": "C:\\Users\\asuus\\Desktop\\GOWell\\ReportAutomation\\well_tools\\ReportAutomation\\well_tools_1\\webapp\\data\\templates\\sample_2_7-13.docx",
-      "placeholders": [
-        "{{proc}}",
-        "{{joints_3LinerPipe}}",
-        "{{highest_3LinerPipe}}"
-      ]
-    },
-    {
-      "name": "7 – 9 – 13 – 18",
-      "damage_count": 0,
-      "config_key": "7-9-13-18",
-      "filename": "sample_9_7-9-13-18.docx",
+      "config_key": "ePDT_Sam.le",
+      "filename": "ePDT_Sam.le.docx",
       "placeholders": []
     }
   ]

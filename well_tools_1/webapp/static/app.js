@@ -46,17 +46,23 @@ const els = {
   excelPath: $("excelPath"),
   workingDirInput: $("workingDirInput"),
   browseFolder: $("browseFolder"),
+  templateSelect: $("templateSelect"),
+  templatePickHint: $("templatePickHint"),
   toWorkspace: $("toWorkspace"),
   inputsStatus: $("inputsStatus"),
   // workspace
   inputsSummary: $("inputsSummary"),
+  loadSchematic: $("loadSchematic"),
+  schematicHint: $("schematicHint"),
   wellName: $("wellName"),
+  fieldName: $("fieldName"),
   wellType: $("wellType"),
   btmDepth: $("btmDepth"),
   logDate: $("logDate"),
   origComp: $("origComp"),
   lastWko: $("lastWko"),
-  config: $("configSelect"),
+  configInput: $("configInput"),
+  configPreview: $("configPreview"),
   company: $("companySelect"),
   damageCount: $("damageCount"),
   includeDisclaimer: $("includeDisclaimer"),
@@ -66,6 +72,7 @@ const els = {
   status: $("status"),
   previewPanel: $("previewPanel"),
   previewMeta: $("previewMeta"),
+  previewResult: $("previewResult"),
   previewBody: $("previewBody"),
 };
 
@@ -75,6 +82,7 @@ const state = {
   companies: [],
   companiesLoaded: false,
   excelPath: null,
+  configOk: false,   // config parsed AND every configured pipe has its Excel sheet
 };
 
 const ivState = { xmlPath: null, templatePath: null };
@@ -105,7 +113,22 @@ async function ensureTemplates() {
   if (!res.ok) throw new Error(`Failed to load templates (HTTP ${res.status})`);
   state.templates = await res.json();
   state.templatesLoaded = true;
-  populateConfigOptions();
+  populateTemplateOptions();
+}
+
+function populateTemplateOptions() {
+  els.templateSelect.innerHTML = "";
+  for (const t of state.templates) {
+    const opt = document.createElement("option");
+    opt.value = String(t.id);
+    opt.textContent = t.config_key ? `${t.name} — ${t.config_key}` : t.name;
+    els.templateSelect.appendChild(opt);
+  }
+  if (els.templatePickHint) {
+    els.templatePickHint.textContent = state.templates.length
+      ? "" : "No templates registered — add one in the Template Manager.";
+    els.templatePickHint.classList.toggle("hint-warn", state.templates.length === 0);
+  }
 }
 
 async function ensureCompanies() {
@@ -145,37 +168,100 @@ function refreshCompanyHint() {
   updateGenerateEnabled();
 }
 
-function updateGenerateEnabled() {
-  els.generate.disabled = !(resolveTemplate() && resolveCompany());
+function configValue() {
+  return (els.configInput.value || "").trim();
 }
 
-function populateConfigOptions() {
-  const configs = [...new Set(state.templates.map((t) => t.config_key))].sort();
-  els.config.innerHTML = "";
-  for (const c of configs) {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    els.config.appendChild(opt);
-  }
-  refreshTemplateHint();
+function updateGenerateEnabled() {
+  els.generate.disabled =
+    !(resolveTemplate() && resolveCompany() && configValue() && state.configOk);
 }
 
 function resolveTemplate() {
-  // Configuration alone selects the template; damages are independent (N).
-  const configKey = els.config.value;
-  return state.templates.find((t) => t.config_key === configKey) || null;
+  // The template is chosen on the inputs page; configuration is parsed separately.
+  const id = parseInt(els.templateSelect.value, 10);
+  return state.templates.find((t) => t.id === id) || null;
 }
 
 function refreshTemplateHint() {
   const t = resolveTemplate();
-  if (t) {
-    els.templateHint.textContent = `Template: ${t.name}`;
-    els.templateHint.classList.remove("hint-warn");
-  } else {
-    els.templateHint.textContent = "No template found for this configuration.";
-    els.templateHint.classList.add("hint-warn");
+  els.templateHint.textContent = t ? `Template: ${t.name}` : "";
+  els.templateHint.classList.remove("hint-warn");
+  updateGenerateEnabled();
+}
+
+// --- Configuration preview (parsed pipe model) ------------------------------
+let _cfgTimer = null;
+function scheduleConfigPreview() {
+  clearTimeout(_cfgTimer);
+  state.configOk = false;        // pending until the preview validates it
+  _cfgTimer = setTimeout(previewConfig, 350);
+  updateGenerateEnabled();
+}
+
+async function previewConfig() {
+  const cfg = configValue();
+  if (!cfg) {
+    els.configPreview.hidden = true;
+    els.configPreview.innerHTML = "";
+    state.configOk = false;
+    updateGenerateEnabled();
+    return;
   }
+  try {
+    const res = await fetch("/api/config/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: cfg, excel_path: state.excelPath }),
+    });
+    const data = await res.json().catch(() => ({}));
+    els.configPreview.hidden = false;
+    if (!res.ok) {
+      state.configOk = false;
+      els.configPreview.className = "config-preview cfg-error";
+      els.configPreview.innerHTML =
+        `<strong>Can't parse:</strong> ${escapeHtml(data.detail || "HTTP " + res.status)}`;
+      updateGenerateEnabled();
+      return;
+    }
+    renderConfigPreview(data);
+  } catch (err) {
+    state.configOk = false;
+    els.configPreview.hidden = false;
+    els.configPreview.className = "config-preview cfg-error";
+    els.configPreview.textContent = `Preview failed: ${err.message || err}`;
+    updateGenerateEnabled();
+  }
+}
+
+function renderConfigPreview(data) {
+  // Case 1 (config > data): any configured pipe missing its Excel sheet blocks generate.
+  const missing = data.pipes.filter((p) => p.sheet_found === false);
+  state.configOk = missing.length === 0;
+
+  els.configPreview.className = "config-preview" + (missing.length ? " cfg-error" : "");
+  const items = data.pipes
+    .map((p) => {
+      if (p.sheet_found === false) {
+        return `<li class="cfg-bad"><span class="cfg-role">${escapeHtml(p.role)}</span>
+                ${escapeHtml(p.suffix)} <span class="cfg-dim">→ no “${escapeHtml(p.sheet)}” sheet in the workbook</span></li>`;
+      }
+      const joints = p.joint_count == null ? "" : ` · ${p.joint_count} joints`;
+      const shoe = p.shoe_text ? ` · shoe ${escapeHtml(p.shoe_text)} ft` : "";
+      return `<li><span class="cfg-role">${escapeHtml(p.role)}</span> ${escapeHtml(p.suffix)}
+              <span class="cfg-dim">→ ${escapeHtml(p.sheet)}${joints}${shoe}</span></li>`;
+    })
+    .join("");
+  const warns = (data.warnings || [])
+    .map((w) => `<li class="cfg-warn">${escapeHtml(w)}</li>`)
+    .join("");
+  const blocked = missing.length
+    ? `<div class="cfg-block">⛔ Configuration has ${data.pipes.length} pipe(s) but the workbook is
+       missing ${missing.length} sheet(s). Fix the configuration or the Excel to generate.</div>`
+    : "";
+  els.configPreview.innerHTML =
+    `<div class="cfg-title">${data.pipes.length} pipe${data.pipes.length === 1 ? "" : "s"}</div>
+     <ul class="cfg-list">${items}${warns}</ul>${blocked}`;
   updateGenerateEnabled();
 }
 
@@ -203,20 +289,80 @@ async function browseFolder() {
   if (path) els.workingDirInput.value = path;
 }
 
+// --- Load optional fields from a well-schematic PDF -------------------------
+const SCHEMATIC_FIELDS = {        // response key -> input element
+  well_name: "wellName",
+  well_type: "wellType",
+  orig_comp: "origComp",
+  last_wko: "lastWko",
+};
+
+function schematicHintMsg(text, warn) {
+  els.schematicHint.textContent = text;
+  els.schematicHint.classList.toggle("hint-warn", !!warn);
+}
+
+async function pickSchematic() {
+  const api = pyapi();
+  if (!api) return schematicHintMsg("Native file dialogs are only available in the desktop app.", true);
+  const path = await api.pick_file(["PDF files (*.pdf)", "All files (*.*)"]);
+  if (!path) return;
+  schematicHintMsg(`Reading ${basename(path)}…`, false);
+  try {
+    const res = await fetch("/api/schematic/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdf_path: path }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return schematicHintMsg(data.detail || `Parse failed (HTTP ${res.status})`, true);
+
+    const filled = [];
+    for (const [key, elId] of Object.entries(SCHEMATIC_FIELDS)) {
+      const val = data.fields ? data.fields[key] : undefined;
+      if (val) {
+        const input = els[elId];
+        input.value = val;
+        input.classList.add("prefilled");        // highlight for review
+        filled.push(key.replace("_", " "));
+      }
+    }
+    if (!filled.length) {
+      schematicHintMsg("No fields could be read from that PDF.", true);
+    } else {
+      const warn = (data.warnings && data.warnings.length)
+        ? "  ⚠ " + data.warnings.join("  ") : "";
+      schematicHintMsg(`Loaded ${filled.length} field(s): ${filled.join(", ")} — review/edit before generating.${warn}`,
+                       !!warn);
+    }
+  } catch (err) {
+    schematicHintMsg(err.message || String(err), true);
+  }
+}
+
+// Clear the review highlight once the user edits a pre-filled field.
+for (const elId of Object.values(SCHEMATIC_FIELDS)) {
+  const input = els[elId];
+  if (input) input.addEventListener("input", () => input.classList.remove("prefilled"));
+}
+
 async function toWorkspace() {
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return inputsError("Please choose an Excel data file.");
   if (!workingDir) return inputsError("Please provide a working directory.");
 
+  if (!resolveTemplate()) return inputsError("Please choose a report template.");
+
   hide(els.inputsStatus);
   try {
-    await ensureTemplates();
     await ensureCompanies();
   } catch (err) {
     return inputsError(err.message || String(err));
   }
   els.inputsSummary.textContent = `Excel: ${basename(state.excelPath)}  •  Folder: ${workingDir}`;
   showView("workspace");
+  refreshTemplateHint();   // show the chosen template
+  previewConfig();         // refresh the parsed-config preview (uses excelPath)
 }
 
 function inputsError(msg) {
@@ -228,15 +374,20 @@ function inputsError(msg) {
 // --- Generate ---------------------------------------------------------------
 async function generate() {
   const template = resolveTemplate();
-  if (!template) return showError("No template found for this configuration.");
+  if (!template) return showError("Please choose a report template (on the previous screen).");
   const company = resolveCompany();
   if (!company) return showError("Please choose a company (or add one in the Company Manager).");
+  if (!configValue()) return showError("Please enter a configuration.");
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
   if (!workingDir) return showError("Working directory is missing — go back and set one.");
 
   setLoading(true);
   showInfo("Generating report…");
+  // Reset the right panel (previous result + preview) for this run.
+  els.previewResult.innerHTML = "";
+  els.previewBody.innerHTML = "";
+  els.previewPanel.hidden = true;
 
   try {
     const res = await fetch("/api/report/generate", {
@@ -255,6 +406,8 @@ async function generate() {
         last_wko: els.lastWko.value.trim() || null,
         well_type: els.wellType.value.trim() || null,
         btm_depth: els.btmDepth.value.trim() || null,
+        field: els.fieldName.value.trim() || null,
+        config: configValue() || null,
       }),
     });
 
@@ -347,24 +500,27 @@ function renderNotes(notes) {
 }
 
 function showSuccess(data) {
+  hide(els.status);   // result + notes now live on the right, above the preview
   const issues = (data.notes || []).filter((n) => noteClass(n) !== "note-info").length;
   const heading = issues
     ? `Report created · ${issues} warning${issues === 1 ? "" : "s"}`
     : "Report created";
-  showStatus(
-    "success",
-    `<strong>${heading}</strong>
-     <div class="result-path">${escapeHtml(data.output_path)}</div>
-     <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
-     ${renderNotes(data.notes)}`
-  );
+  els.previewPanel.hidden = false;
+  els.previewResult.innerHTML =
+    `<div class="status success">
+       <strong>${heading}</strong>
+       <div class="result-path">${escapeHtml(data.output_path)}</div>
+       <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
+       ${renderNotes(data.notes)}
+     </div>`;
   const btn = $("revealBtn");
   if (btn) btn.addEventListener("click", () => reveal(data.output_path));
   requestPreview(data.run_id);
 }
 
 function setLoading(loading) {
-  els.generate.disabled = loading || !resolveTemplate() || !resolveCompany();
+  els.generate.disabled =
+    loading || !resolveTemplate() || !resolveCompany() || !configValue() || !state.configOk;
   els.generate.textContent = loading ? "Working…" : "Generate Report";
 }
 
@@ -756,7 +912,10 @@ function escapeHtml(s) {
 }
 
 // --- Wire up ----------------------------------------------------------------
-els.modeReport.addEventListener("click", () => showView("inputs"));
+els.modeReport.addEventListener("click", () => {
+  showView("inputs");
+  ensureTemplates().catch((err) => inputsError(err.message || String(err)));
+});
 els.modeInterval.addEventListener("click", () => showView("interval"));
 els.modeGhost.addEventListener("click", () => showView("ghost"));
 els.openTemplates.addEventListener("click", () => showView("templates"));
@@ -780,9 +939,11 @@ els.ghostMerge.addEventListener("click", ghostMerge);
 
 els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
+els.loadSchematic.addEventListener("click", pickSchematic);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
-els.config.addEventListener("change", refreshTemplateHint);
+els.templateSelect.addEventListener("change", refreshTemplateHint);
+els.configInput.addEventListener("input", scheduleConfigPreview);
 els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 

@@ -94,14 +94,17 @@ def replace_fields_in_doc(doc, mapping):
     return counts
 
 
-def apply_text_fields(path, mapping, progress=None, review=None):
+def apply_text_fields(path, mapping, progress=None, review=None, quiet_tags=None):
     """Open `path`, apply the {tag: value} mapping, save in place.
 
     Every tag is replaced (empty values clear the tag so no `{{...}}` is left in
     the output). A review warning is emitted for any tag that had a non-empty
-    value but was not found in the document. Returns {tag: count}."""
+    value but was not found — except tags in `quiet_tags` (e.g. auto-derived
+    pipe-metadata tags a template may legitimately not use everywhere).
+    Returns {tag: count}."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
+    quiet = set(quiet_tags or ())
 
     doc = Document(path)
     counts = replace_fields_in_doc(doc, mapping)
@@ -109,7 +112,7 @@ def apply_text_fields(path, mapping, progress=None, review=None):
 
     written = sum(1 for tag, v in mapping.items() if (v not in (None, "")) and counts.get(tag))
     for tag, value in mapping.items():
-        if value not in (None, "") and not counts.get(tag):
+        if value not in (None, "") and not counts.get(tag) and tag not in quiet:
             rev(f"⚠ {tag} not found in the template — value not written.")
     log(f"Text fields: {written} field(s) written "
         f"({sum(counts.values())} replacement(s)).")
