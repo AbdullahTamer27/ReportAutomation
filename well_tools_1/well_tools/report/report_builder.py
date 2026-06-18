@@ -148,5 +148,12 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         conditional.apply_conditional_lines(output_path, conditional_lines,
                                             progress=log, review=review)
 
+    # ---- 2.8) Per-pipe metal-loss pie charts ({{pie_<role>}}) ----
+    if pipe_model is not None:
+        log("Rendering per-pipe pie charts…")
+        from . import charts
+        charts.place_pie_charts(output_path, pipe_model, excel_data_path,
+                                progress=log, review=review)
+
     log(f"Done → {output_path}")
     return output_path

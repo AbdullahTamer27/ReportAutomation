@@ -11,7 +11,7 @@ echo.
 echo [1/3] Installing / verifying build dependencies...
 pip install pyinstaller pywin32 ^
     fastapi "uvicorn[standard]" sqlalchemy pywebview ^
-    pymupdf docx2pdf python-docx openpyxl pandas lxml
+    pymupdf docx2pdf python-docx openpyxl pandas lxml matplotlib
 echo.
 
 echo [2/3] Running pywin32 post-install (COM support for docx2pdf)...
