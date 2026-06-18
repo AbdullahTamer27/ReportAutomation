@@ -203,8 +203,8 @@ def render_pie(pipe, counts, out_path):
     # Give every row an explicit height in axes-fraction units so the table
     # exactly fills its band (no overflow that would clip the Total row). The
     # header counts as two units, making it twice as tall as a normal row.
-    # Fonts: header Calibri 9 bold; grade letters and the Total row Tahoma 8
-    # bold; all other data cells Calibri 8.
+    # Fonts: header Calibri 9 bold; grade letters and the 'Total' label Tahoma 8
+    # bold; all other data cells (incl. the Total's count + %) Calibri 8.
     n_rows = len(cell_text)
     unit = 1.0 / (n_rows + 1)            # +1 because the header is double height
     for (r, c), cell in table.get_celld().items():
@@ -213,9 +213,12 @@ def render_pie(pipe, counts, out_path):
         if r == 0:                                   # header — Calibri 9 bold
             cell.set_text_props(fontfamily="Calibri", fontsize=9,
                                 fontweight="bold", color="white")
-        elif r == n_rows - 1:                        # Total row — Tahoma 8 bold
-            cell.set_text_props(fontfamily="Tahoma", fontsize=8,
-                                fontweight="bold")
+        elif r == n_rows - 1:                        # Total row
+            if c == 0:                               # 'Total' label — Tahoma 8 bold
+                cell.set_text_props(fontfamily="Tahoma", fontsize=8,
+                                    fontweight="bold")
+            else:                                    # count + % — like the data cells
+                cell.set_text_props(fontfamily="Calibri", fontsize=8)
         elif c == 0:                                 # grade letter — Tahoma 8 bold
             cell.set_text_props(fontfamily="Tahoma", fontsize=8,
                                 fontweight="bold")
