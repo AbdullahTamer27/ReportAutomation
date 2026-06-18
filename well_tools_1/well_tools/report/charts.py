@@ -24,10 +24,16 @@ import os
 import shutil
 import tempfile
 
+import logging
+
 import matplotlib
 matplotlib.use("Agg")          # headless: never touch a display
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+
+# Silence "findfont: Font family 'Calibri' not found." — Calibri is present on
+# the Windows target but not every dev box; the fallback renders fine.
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 from .tables import (
     GRADE_COLORS, MAX_LOSS_IDX, grade_for_loss, is_excluded, read_joints,
@@ -35,8 +41,13 @@ from .tables import (
 
 GRADES = ("A", "B", "C", "D")
 
-# Header band of the small table — Excel "Blue, Accent 1".
-_HEADER_BLUE = "#2E75B6"
+# Header band of the small table — matches the original report's pie table.
+_HEADER_BLUE = "#0070C0"
+
+# Title font — Calibri (body) to match the document; matplotlib falls back to
+# its default sans-serif if Calibri isn't installed (e.g. on a non-Windows box).
+_TITLE_FONT = "Calibri"
+_TITLE_SIZE = 18
 
 
 def _hex(grade):
@@ -94,10 +105,12 @@ def render_pie(pipe, counts, out_path):
 
     fig = plt.figure(figsize=(5.0, 5.6), dpi=120)
     fig.suptitle(f"ML% Classification Pie Chart\n{pipe['suffix']}",
-                 fontsize=16, y=0.98)
+                 fontfamily=_TITLE_FONT, fontsize=_TITLE_SIZE, y=0.98)
 
-    # Pie occupies the upper ~58%, the table the lower ~32%.
-    ax_pie = fig.add_axes([0.02, 0.40, 0.74, 0.46])
+    # Pie fills the space down to just above the table; the table sits in the
+    # lower ~32%. The pie's diameter is height-constrained, so dropping the
+    # axes bottom toward the table grows the circle into the former gap.
+    ax_pie = fig.add_axes([0.02, 0.33, 0.74, 0.53])
     ax_tab = fig.add_axes([0.08, 0.02, 0.84, 0.30])
     ax_tab.axis("off")
 
@@ -163,16 +176,22 @@ def render_pie(pipe, counts, out_path):
     table.scale(1, 1.6)
 
     n_rows = len(cell_text)
+    # Normal row height (post-scale), so the header can be made twice as tall.
+    base_h = table[1, 0].get_height()
     for (r, c), cell in table.get_celld().items():
         cell.set_edgecolor("#BFBFBF")
-        if r == 0:                                   # header band
+        if r == 0:                                   # header band — double height
+            cell.set_height(base_h * 2)
             cell.set_text_props(color="white", fontweight="bold")
         elif r == n_rows - 1:                        # Total row
             cell.set_text_props(fontweight="bold")
         elif c == 0:                                 # grade letter cell
             cell.set_text_props(fontweight="bold")
 
-    fig.savefig(out_path, dpi=120, facecolor="white")
+    # bbox_inches="tight" trims the surrounding whitespace so the image has no
+    # extra side padding when placed in the document.
+    fig.savefig(out_path, dpi=120, facecolor="white",
+                bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     return out_path
 
