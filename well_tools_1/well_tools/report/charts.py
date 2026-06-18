@@ -129,7 +129,7 @@ def render_pie(pipe, counts, out_path):
     # the table, the table spanning the full image width. set_aspect("equal")
     # keeps the pie a true circle (height-constrained here), so it is never
     # stretched. The pie box height (~0.39) sets the circle's diameter.
-    ax_pie = fig.add_axes([0.16, 0.345, 0.56, 0.47])
+    ax_pie = fig.add_axes([0.15, 0.335, 0.58, 0.49])
     ax_tab = fig.add_axes([0.01, 0.02, 0.98, 0.30])
     ax_tab.axis("off")
 
@@ -178,9 +178,9 @@ def render_pie(pipe, counts, out_path):
     # text, like the original report's pie images.
     handles = [Patch(facecolor=_hex(g), edgecolor="none", label=g) for g in GRADES]
     ax_pie.legend(handles=handles, loc="center left",
-                  bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=8,
-                  handlelength=1.0, handleheight=1.0,
-                  labelspacing=0.5, borderaxespad=0.2)
+                  bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=6.5,
+                  handlelength=0.8, handleheight=0.8,
+                  labelspacing=0.4, borderaxespad=0.1, handletextpad=0.4)
 
     # Table: header + 4 grade rows + Total.
     cell_text = [["Grade", "Joints", "% of Total"]]
