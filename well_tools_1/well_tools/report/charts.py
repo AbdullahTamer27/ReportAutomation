@@ -49,6 +49,12 @@ _HEADER_BLUE = "#0070C0"
 _TITLE_FONT = "Calibri"
 _TITLE_SIZE = 18
 
+# Final image size, in inches — fixed so every pie drops into its placeholder
+# at the same dimensions (the table stretches to this full width; the circle is
+# left at its natural size and centred).
+_IMG_W_IN = 3.34
+_IMG_H_IN = 3.79
+
 
 def _hex(grade):
     return "#" + GRADE_COLORS[grade]
@@ -103,15 +109,26 @@ def render_pie(pipe, counts, out_path):
     pcts = _percentages(values)
     total = sum(values)
 
-    fig = plt.figure(figsize=(5.0, 5.6), dpi=120)
-    fig.suptitle(f"ML% Classification Pie Chart\n{pipe['suffix']}",
-                 fontfamily=_TITLE_FONT, fontsize=_TITLE_SIZE, y=0.98)
+    fig = plt.figure(figsize=(_IMG_W_IN, _IMG_H_IN), dpi=120)
+    # y < 1 leaves a small band of padding between the top border and the title.
+    title = fig.suptitle(f"ML% Classification Pie Chart\n{pipe['suffix']}",
+                         fontfamily=_TITLE_FONT, fontsize=_TITLE_SIZE,
+                         va="top", y=0.965)
+    # Keep 18 pt as the target, but shrink just enough to never clip the width.
+    # Calibri at 18 pt fits 3.34"; a wider fallback font (no Calibri installed)
+    # would otherwise overflow, so measure the rendered title and scale down.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    title_w = title.get_window_extent(renderer).width
+    limit_w = fig.bbox.width * 0.96
+    if title_w > limit_w:
+        title.set_fontsize(_TITLE_SIZE * limit_w / title_w)
 
-    # Pie fills the space down to just above the table; the table sits in the
-    # lower ~32%. The pie's diameter is height-constrained, so dropping the
-    # axes bottom toward the table grows the circle into the former gap.
-    ax_pie = fig.add_axes([0.02, 0.33, 0.74, 0.53])
-    ax_tab = fig.add_axes([0.08, 0.02, 0.84, 0.30])
+    # Table spans the full image width (small side margin only). The pie sits in
+    # the band between title and table; set_aspect("equal") keeps it a true
+    # circle, so it takes only the width it needs and is not stretched.
+    ax_pie = fig.add_axes([0.0, 0.34, 0.76, 0.46])
+    ax_tab = fig.add_axes([0.01, 0.015, 0.98, 0.30])
     ax_tab.axis("off")
 
     if total > 0:
@@ -173,25 +190,25 @@ def render_pie(pipe, counts, out_path):
                          cellLoc="center", loc="center")
     table.auto_set_font_size(False)
     table.set_fontsize(11)
-    table.scale(1, 1.6)
 
+    # Give every row an explicit height in axes-fraction units so the table
+    # exactly fills its band (no overflow that would clip the Total row). The
+    # header counts as two units, making it twice as tall as a normal row.
     n_rows = len(cell_text)
-    # Normal row height (post-scale), so the header can be made twice as tall.
-    base_h = table[1, 0].get_height()
+    unit = 1.0 / (n_rows + 1)            # +1 because the header is double height
     for (r, c), cell in table.get_celld().items():
         cell.set_edgecolor("#BFBFBF")
+        cell.set_height(2 * unit if r == 0 else unit)
         if r == 0:                                   # header band — double height
-            cell.set_height(base_h * 2)
             cell.set_text_props(color="white", fontweight="bold")
         elif r == n_rows - 1:                        # Total row
             cell.set_text_props(fontweight="bold")
         elif c == 0:                                 # grade letter cell
             cell.set_text_props(fontweight="bold")
 
-    # bbox_inches="tight" trims the surrounding whitespace so the image has no
-    # extra side padding when placed in the document.
-    fig.savefig(out_path, dpi=120, facecolor="white",
-                bbox_inches="tight", pad_inches=0.08)
+    # Save at the exact figure size (no tight crop) so the image is precisely
+    # _IMG_W_IN x _IMG_H_IN; the axes layout already removes side padding.
+    fig.savefig(out_path, dpi=120, facecolor="white")
     plt.close(fig)
     return out_path
 
