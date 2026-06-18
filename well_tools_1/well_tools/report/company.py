@@ -126,14 +126,16 @@ def place_company_logo(path, logo_path, company_name=None, progress=None, review
     name_done = _replace_company_name(doc, company_name) if company_name else 0
     doc.save(path)
 
+    # A template normally carries the logo in only ONE place (body table OR
+    # header pictures), so a missing location is expected — log it, don't warn.
     if body_done:
         log(f"Company logo placed in {TAG} body table.")
     else:
-        rev(f"⚠ No {TAG} table in the body — body logo not placed.")
+        log(f"No {TAG} table in the body — body logo not placed.")
     if headers_done:
         log(f"Company logo swapped in {headers_done} header picture(s).")
     else:
-        rev(f"⚠ No header picture tagged {TAG} (Alt Text) — header logos unchanged.")
+        log(f"No header picture tagged {TAG} (Alt Text) — header logos unchanged.")
     if company_name:
         if name_done:
             log(f"Company name written into {name_done} {NAME_TAG} location(s).")

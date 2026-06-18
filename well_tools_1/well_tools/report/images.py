@@ -180,6 +180,33 @@ def _replace_drawing_image(doc, drawing, image_path):
     return True
 
 
+def _detach_drawing(drawing):
+    """Remove a drawing's enclosing run, plus its paragraph if that leaves it
+    empty, so no blank line or stray placeholder box is left behind. Returns True
+    if something was removed."""
+    # Climb from the inline/anchor up to its <w:drawing> wrapper.
+    w_drawing = drawing
+    while w_drawing is not None and w_drawing.tag != qn("w:drawing"):
+        w_drawing = w_drawing.getparent()
+    if w_drawing is None:
+        return False
+    run = w_drawing.getparent()                          # the enclosing <w:r>
+    para = run.getparent() if run is not None else None
+    target = run if (run is not None and run.tag == qn("w:r")) else w_drawing
+    parent = target.getparent()
+    if parent is None:
+        return False
+    parent.remove(target)
+    # Drop the paragraph if nothing but its formatting (<w:pPr>) remains.
+    if para is not None and para.tag == qn("w:p"):
+        leftover = [c for c in para if c.tag != qn("w:pPr")]
+        if not leftover:
+            grandparent = para.getparent()
+            if grandparent is not None:
+                grandparent.remove(para)
+    return True
+
+
 def remove_unfilled_alttext_placeholders(doc, keep_tags, tag_pattern, progress=None):
     """Delete placeholder pictures whose Alt Text matches `tag_pattern` but whose
     tag is NOT in `keep_tags` — i.e. slots nothing was inserted into.
@@ -200,35 +227,21 @@ def remove_unfilled_alttext_placeholders(doc, keep_tags, tag_pattern, progress=N
         tag = _alttext_tag(drawing)
         if not tag or tag in keep_tags or not tag_pattern.match(tag):
             continue
-        # Climb from the inline/anchor up to its <w:drawing> wrapper.
-        w_drawing = drawing
-        while w_drawing is not None and w_drawing.tag != qn("w:drawing"):
-            w_drawing = w_drawing.getparent()
-        if w_drawing is None:
-            continue
-        run = w_drawing.getparent()                      # the enclosing <w:r>
-        para = run.getparent() if run is not None else None
-        target = run if (run is not None and run.tag == qn("w:r")) else w_drawing
-        parent = target.getparent()
-        if parent is None:
-            continue
-        parent.remove(target)
-        removed += 1
-        log(f"Removed un-inserted placeholder {tag}")
-        # Drop the paragraph if nothing but its formatting (<w:pPr>) remains, so
-        # we don't leave an empty line where the chart used to be.
-        if para is not None and para.tag == qn("w:p"):
-            leftover = [c for c in para if c.tag != qn("w:pPr")]
-            if not leftover:
-                grandparent = para.getparent()
-                if grandparent is not None:
-                    grandparent.remove(para)
+        if _detach_drawing(drawing):
+            removed += 1
+            log(f"Removed un-inserted placeholder {tag}")
     return removed
 
 
-def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=None):
+def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=None,
+                            restrict_to_dict=False):
     """Fill every body picture whose Alt Text is a known image tag. Returns
-    (placed, skipped, missing). Non-image tags (e.g. {{COMP}}) are ignored."""
+    (placed, skipped, missing). Non-image tags (e.g. {{COMP}}) are ignored.
+
+    With `restrict_to_dict=True`, only tags that are literal keys of `tag_to_file`
+    are considered — the pattern-matched families (e.g. {{DMGi_j}}) are skipped.
+    The pie-chart pass uses this so it doesn't touch damage placeholders (whose
+    files live in a different folder) and re-warn about them."""
     log = progress or print
     rev = review or (lambda m: None)
     placed, skipped, missing = 0, 0, []
@@ -239,6 +252,8 @@ def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=
         tag = _alttext_tag(drawing)
         if not tag:
             continue
+        if restrict_to_dict and tag not in tag_to_file:
+            continue   # only handle this pass's own tags; ignore other families
         fname = _filename_for_tag(tag, tag_to_file)
         if not fname:
             continue   # tag present but not an image tag (e.g. {{COMP}}) — skip

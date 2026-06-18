@@ -267,8 +267,11 @@ def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=
         doc = Document(output_path)
         placed, skipped = 0, 0
         if tag_to_file:
+            # restrict_to_dict: only touch {{pie_*}} placeholders. Without this,
+            # the shared placer would also match {{DMGi_j}} (a pattern family),
+            # look for those files in the pie temp folder, and falsely warn.
             placed, skipped, _missing = place_images_by_alttext(
-                doc, tmp, tag_to_file, progress=log, review=rev)
+                doc, tmp, tag_to_file, progress=log, review=rev, restrict_to_dict=True)
         # Sweep out every pie placeholder we didn't fill — the absent pipes.
         removed = remove_unfilled_alttext_placeholders(
             doc, set(tag_to_file), _PIE_PLACEHOLDER, progress=log)
