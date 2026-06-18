@@ -47,7 +47,7 @@ _HEADER_BLUE = "#0070C0"
 # Title font — Calibri (body) to match the document; matplotlib falls back to
 # its default sans-serif if Calibri isn't installed (e.g. on a non-Windows box).
 _TITLE_FONT = "Calibri"
-_TITLE_SIZE = 18
+_TITLE_SIZE = 15
 
 # Final image size, in inches — fixed so every pie drops into its placeholder
 # at the same dimensions (the table stretches to this full width; the circle is
@@ -124,11 +124,13 @@ def render_pie(pipe, counts, out_path):
     if title_w > limit_w:
         title.set_fontsize(_TITLE_SIZE * limit_w / title_w)
 
-    # Table spans the full image width (small side margin only). The pie sits in
-    # the band between title and table; set_aspect("equal") keeps it a true
-    # circle, so it takes only the width it needs and is not stretched.
-    ax_pie = fig.add_axes([0.0, 0.34, 0.76, 0.46])
-    ax_tab = fig.add_axes([0.01, 0.015, 0.98, 0.30])
+    # Layout mirrors the original report's pie images (measured as canvas
+    # fractions): a modest pie centred near x=0.44 with clear whitespace above
+    # the table, the table spanning the full image width. set_aspect("equal")
+    # keeps the pie a true circle (height-constrained here), so it is never
+    # stretched. The pie box height (~0.39) sets the circle's diameter.
+    ax_pie = fig.add_axes([0.21, 0.40, 0.46, 0.39])
+    ax_tab = fig.add_axes([0.01, 0.02, 0.98, 0.30])
     ax_tab.axis("off")
 
     if total > 0:
@@ -172,10 +174,13 @@ def render_pie(pipe, counts, out_path):
         ax_pie.text(0, 0, "No data", ha="center", va="center", fontsize=12)
     ax_pie.set_aspect("equal")
 
-    # Legend: always all four grades, to the right of the pie.
+    # Legend: always all four grades, to the right of the pie. Small markers and
+    # text, like the original report's pie images.
     handles = [Patch(facecolor=_hex(g), edgecolor="none", label=g) for g in GRADES]
     ax_pie.legend(handles=handles, loc="center left",
-                  bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=11)
+                  bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=8,
+                  handlelength=1.0, handleheight=1.0,
+                  labelspacing=0.5, borderaxespad=0.2)
 
     # Table: header + 4 grade rows + Total.
     cell_text = [["Grade", "Joints", "% of Total"]]
