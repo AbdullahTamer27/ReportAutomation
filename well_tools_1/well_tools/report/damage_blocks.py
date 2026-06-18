@@ -15,6 +15,7 @@ substitution, so a `@N` that Word split across runs is still replaced reliably.
 """
 
 import copy
+import re
 
 from docx import Document
 from docx.oxml.ns import qn
@@ -22,6 +23,9 @@ from docx.oxml.ns import qn
 START_TOKEN = "{{damage_block_start}}"
 END_TOKEN = "{{damage_block_end}}"
 INDEX_SENTINEL = "@N"
+
+# A concrete damage image placeholder, e.g. {{DMG1_2}} (after any expansion).
+_DMG_TAG_RE = re.compile(r"\{\{DMG\d+_\d+\}\}")
 
 _W_P = qn("w:p")
 _W_T = qn("w:t")
@@ -31,6 +35,22 @@ _PIC_CNVPR = qn("pic:cNvPr")
 
 def _element_text(el):
     return "".join(t.text or "" for t in el.iter(_W_T))
+
+
+def _has_damage_placeholders(doc):
+    """True if the document already holds concrete {{DMGi_j}} image placeholders
+    (text or picture Alt Text). These are filled directly by the image pass, so a
+    template can carry static damage slots instead of a repeatable marker block."""
+    body = doc.element.body
+    for p in body.iter(_W_P):
+        if _DMG_TAG_RE.search(_element_text(p)):
+            return True
+    for docPr in body.iter(_WP_DOCPR):
+        for attr in ("descr", "name", "title"):
+            v = docPr.get(attr)
+            if v and _DMG_TAG_RE.search(v):
+                return True
+    return False
 
 
 def _subst_index_in_element(el, i):
@@ -138,8 +158,15 @@ def expand_in_file(path, damage_count, progress=None, review=None):
     if found:
         log(f"Damage sections: block expanded x{int(damage_count)}.")
     elif damage_count and int(damage_count) > 0:
-        rev(f"⚠ Number of damages = {int(damage_count)}, but the template has no "
-            f"{START_TOKEN}/{END_TOKEN} markers — no damage pictures were added.")
+        # No repeatable block — but if the template carries static {{DMGi_j}}
+        # placeholders, the image pass fills them, so don't cry wolf.
+        if _has_damage_placeholders(doc):
+            log(f"Damage sections: no {START_TOKEN}/{END_TOKEN} block, but static "
+                f"{{{{DMGi_j}}}} placeholders are present — the image pass fills them.")
+        else:
+            rev(f"⚠ Number of damages = {int(damage_count)}, but the template has no "
+                f"{START_TOKEN}/{END_TOKEN} markers and no {{{{DMGi_j}}}} placeholders — "
+                f"no damage pictures were added.")
     else:
         log("Damage sections: no block markers (none requested).")
     return found
