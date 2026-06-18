@@ -141,7 +141,7 @@ def render_pie(pipe, counts, out_path):
             startangle=90, counterclock=False,
             autopct=lambda _frac: f"{next(wedge_pcts)}%",
             pctdistance=0.7,
-            textprops={"fontsize": 11},
+            textprops={"fontfamily": "Calibri", "fontsize": 9},
             wedgeprops={"edgecolor": "white", "linewidth": 0.5},
         )
         # Slices too thin to hold their label get one floated just outside the
@@ -189,22 +189,28 @@ def render_pie(pipe, counts, out_path):
     table = ax_tab.table(cellText=cell_text, cellColours=cell_colours,
                          cellLoc="center", loc="center")
     table.auto_set_font_size(False)
-    table.set_fontsize(11)
 
     # Give every row an explicit height in axes-fraction units so the table
     # exactly fills its band (no overflow that would clip the Total row). The
     # header counts as two units, making it twice as tall as a normal row.
+    # Fonts: header Calibri 11 bold; grade letters and the Total row Tahoma 10
+    # bold; all other data cells Calibri 10.
     n_rows = len(cell_text)
     unit = 1.0 / (n_rows + 1)            # +1 because the header is double height
     for (r, c), cell in table.get_celld().items():
         cell.set_edgecolor("#BFBFBF")
         cell.set_height(2 * unit if r == 0 else unit)
-        if r == 0:                                   # header band — double height
-            cell.set_text_props(color="white", fontweight="bold")
-        elif r == n_rows - 1:                        # Total row
-            cell.set_text_props(fontweight="bold")
-        elif c == 0:                                 # grade letter cell
-            cell.set_text_props(fontweight="bold")
+        if r == 0:                                   # header — Calibri 11 bold
+            cell.set_text_props(fontfamily="Calibri", fontsize=11,
+                                fontweight="bold", color="white")
+        elif r == n_rows - 1:                        # Total row — Tahoma 10 bold
+            cell.set_text_props(fontfamily="Tahoma", fontsize=10,
+                                fontweight="bold")
+        elif c == 0:                                 # grade letter — Tahoma 10 bold
+            cell.set_text_props(fontfamily="Tahoma", fontsize=10,
+                                fontweight="bold")
+        else:                                        # data — Calibri 10
+            cell.set_text_props(fontfamily="Calibri", fontsize=10)
 
     # Save at the exact figure size (no tight crop) so the image is precisely
     # _IMG_W_IN x _IMG_H_IN; the axes layout already removes side padding.
