@@ -129,7 +129,7 @@ def render_pie(pipe, counts, out_path):
     # the table, the table spanning the full image width. set_aspect("equal")
     # keeps the pie a true circle (height-constrained here), so it is never
     # stretched. The pie box height (~0.39) sets the circle's diameter.
-    ax_pie = fig.add_axes([0.18, 0.36, 0.52, 0.44])
+    ax_pie = fig.add_axes([0.16, 0.345, 0.56, 0.47])
     ax_tab = fig.add_axes([0.01, 0.02, 0.98, 0.30])
     ax_tab.axis("off")
 
@@ -143,7 +143,7 @@ def render_pie(pipe, counts, out_path):
             startangle=90, counterclock=False,
             autopct=lambda _frac: f"{next(wedge_pcts)}%",
             pctdistance=0.7,
-            textprops={"fontfamily": "Calibri", "fontsize": 9},
+            textprops={"fontfamily": "Calibri", "fontsize": 7},
             wedgeprops={"edgecolor": "white", "linewidth": 0.5},
         )
         # Slices too thin to hold their label get one floated just outside the
