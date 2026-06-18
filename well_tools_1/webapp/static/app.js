@@ -52,6 +52,8 @@ const els = {
   inputsStatus: $("inputsStatus"),
   // workspace
   inputsSummary: $("inputsSummary"),
+  loadSchematic: $("loadSchematic"),
+  schematicHint: $("schematicHint"),
   wellName: $("wellName"),
   wellType: $("wellType"),
   btmDepth: $("btmDepth"),
@@ -284,6 +286,63 @@ async function browseFolder() {
   if (!api) return inputsError("Native folder dialogs are only available in the desktop app.");
   const path = await api.pick_folder();
   if (path) els.workingDirInput.value = path;
+}
+
+// --- Load optional fields from a well-schematic PDF -------------------------
+const SCHEMATIC_FIELDS = {        // response key -> input element
+  well_name: "wellName",
+  well_type: "wellType",
+  orig_comp: "origComp",
+  last_wko: "lastWko",
+};
+
+function schematicHintMsg(text, warn) {
+  els.schematicHint.textContent = text;
+  els.schematicHint.classList.toggle("hint-warn", !!warn);
+}
+
+async function pickSchematic() {
+  const api = pyapi();
+  if (!api) return schematicHintMsg("Native file dialogs are only available in the desktop app.", true);
+  const path = await api.pick_file(["PDF files (*.pdf)", "All files (*.*)"]);
+  if (!path) return;
+  schematicHintMsg(`Reading ${basename(path)}…`, false);
+  try {
+    const res = await fetch("/api/schematic/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdf_path: path }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return schematicHintMsg(data.detail || `Parse failed (HTTP ${res.status})`, true);
+
+    const filled = [];
+    for (const [key, elId] of Object.entries(SCHEMATIC_FIELDS)) {
+      const val = data.fields ? data.fields[key] : undefined;
+      if (val) {
+        const input = els[elId];
+        input.value = val;
+        input.classList.add("prefilled");        // highlight for review
+        filled.push(key.replace("_", " "));
+      }
+    }
+    if (!filled.length) {
+      schematicHintMsg("No fields could be read from that PDF.", true);
+    } else {
+      const warn = (data.warnings && data.warnings.length)
+        ? "  ⚠ " + data.warnings.join("  ") : "";
+      schematicHintMsg(`Loaded ${filled.length} field(s): ${filled.join(", ")} — review/edit before generating.${warn}`,
+                       !!warn);
+    }
+  } catch (err) {
+    schematicHintMsg(err.message || String(err), true);
+  }
+}
+
+// Clear the review highlight once the user edits a pre-filled field.
+for (const elId of Object.values(SCHEMATIC_FIELDS)) {
+  const input = els[elId];
+  if (input) input.addEventListener("input", () => input.classList.remove("prefilled"));
 }
 
 async function toWorkspace() {
@@ -878,6 +937,7 @@ els.ghostMerge.addEventListener("click", ghostMerge);
 
 els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
+els.loadSchematic.addEventListener("click", pickSchematic);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
 els.templateSelect.addEventListener("change", refreshTemplateHint);

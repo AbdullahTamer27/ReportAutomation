@@ -168,6 +168,15 @@ class ConfigPreviewResponse(BaseModel):
     warnings: list[str]
 
 
+class SchematicRequest(BaseModel):
+    pdf_path: str = Field(..., description="Absolute path to the well-schematic PDF")
+
+
+class SchematicResponse(BaseModel):
+    fields: dict[str, str]   # only the keys found, among well_name/well_type/orig_comp/last_wko
+    warnings: list[str]
+
+
 class IntervalRequest(BaseModel):
     xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml file")
     template_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm template to update in place")
@@ -278,6 +287,28 @@ def config_preview(req: ConfigPreviewRequest):
         logger.exception("Config preview failed")
         raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
     return ConfigPreviewResponse(**result)
+
+
+@app.post("/api/schematic/parse", response_model=SchematicResponse)
+def schematic_parse(req: SchematicRequest):
+    """Extract well metadata (name, type, original-completion / last-workover
+    dates) from a Well Cross Section Plot PDF so the UI can pre-fill the optional
+    inputs for the user to review before generating. Read-only."""
+    if not req.pdf_path or not os.path.isfile(req.pdf_path):
+        raise HTTPException(status_code=400, detail="PDF not found at that path.")
+    if not req.pdf_path.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please choose a .pdf file.")
+    try:
+        from well_tools.report.schematic import parse_schematic
+        result = parse_schematic(req.pdf_path)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Schematic parse failed")
+        raise HTTPException(status_code=500, detail=f"Could not parse the schematic: {e}")
+    if not result["fields"]:
+        result["warnings"].append(
+            "No recognizable fields found — is this a standard Well Cross Section Plot PDF?"
+        )
+    return SchematicResponse(**result)
 
 
 @app.post("/api/ghost/merge", response_model=GhostResponse)

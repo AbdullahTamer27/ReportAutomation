@@ -252,6 +252,12 @@ select:focus, .text-input:focus {
 }
 .text-input::placeholder { color: var(--muted); }
 
+/* A field pre-filled from the schematic PDF — highlighted until reviewed/edited. */
+.text-input.prefilled {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
 .picker {
   display: flex;
   align-items: center;
