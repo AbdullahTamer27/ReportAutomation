@@ -180,6 +180,52 @@ def _replace_drawing_image(doc, drawing, image_path):
     return True
 
 
+def remove_unfilled_alttext_placeholders(doc, keep_tags, tag_pattern, progress=None):
+    """Delete placeholder pictures whose Alt Text matches `tag_pattern` but whose
+    tag is NOT in `keep_tags` — i.e. slots nothing was inserted into.
+
+    This lets a template omit per-item images (e.g. a pie chart for a pipe that
+    doesn't exist) using only the picture's own Alt Text as the marker — no
+    ``{{x_start}}…{{x_end}}`` section markers wrapped around it, which aren't
+    practical when the images are arranged side-by-side / floating.
+
+    Removes the picture's run, and the containing paragraph too if that leaves it
+    empty, so no blank line or stray box is left behind. Returns the count removed.
+    """
+    log = progress or print
+    body = doc.element.body
+    removed = 0
+    drawings = list(body.iter(qn("wp:inline"))) + list(body.iter(qn("wp:anchor")))
+    for drawing in drawings:
+        tag = _alttext_tag(drawing)
+        if not tag or tag in keep_tags or not tag_pattern.match(tag):
+            continue
+        # Climb from the inline/anchor up to its <w:drawing> wrapper.
+        w_drawing = drawing
+        while w_drawing is not None and w_drawing.tag != qn("w:drawing"):
+            w_drawing = w_drawing.getparent()
+        if w_drawing is None:
+            continue
+        run = w_drawing.getparent()                      # the enclosing <w:r>
+        para = run.getparent() if run is not None else None
+        target = run if (run is not None and run.tag == qn("w:r")) else w_drawing
+        parent = target.getparent()
+        if parent is None:
+            continue
+        parent.remove(target)
+        removed += 1
+        log(f"Removed un-inserted placeholder {tag}")
+        # Drop the paragraph if nothing but its formatting (<w:pPr>) remains, so
+        # we don't leave an empty line where the chart used to be.
+        if para is not None and para.tag == qn("w:p"):
+            leftover = [c for c in para if c.tag != qn("w:pPr")]
+            if not leftover:
+                grandparent = para.getparent()
+                if grandparent is not None:
+                    grandparent.remove(para)
+    return removed
+
+
 def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=None):
     """Fill every body picture whose Alt Text is a known image tag. Returns
     (placed, skipped, missing). Non-image tags (e.g. {{COMP}}) are ignored."""

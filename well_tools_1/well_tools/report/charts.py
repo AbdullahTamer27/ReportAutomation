@@ -21,6 +21,7 @@ thresholds the tables use, so a pie can never disagree with its table.
 
 import math
 import os
+import re
 import shutil
 import tempfile
 
@@ -40,6 +41,10 @@ from .tables import (
 )
 
 GRADES = ("A", "B", "C", "D")
+
+# Alt Text on a pie placeholder picture, e.g. {{pie_firstPipe}}. Placeholders
+# matching this whose pipe is absent are deleted (no section markers needed).
+_PIE_PLACEHOLDER = re.compile(r"^\{\{pie_\w+\}\}$")
 
 # Header band of the small table — matches the original report's pie table.
 _HEADER_BLUE = "#0070C0"
@@ -226,17 +231,19 @@ def render_pie(pipe, counts, out_path):
 
 # ---------------- orchestration ----------------
 def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=None):
-    """Render a pie for every present pipe and drop each into its
-    ``{{pie_<role>}}`` alt-text placeholder in `output_path` (edited in place).
+    """Render a pie for every present pipe, drop each into its ``{{pie_<role>}}``
+    alt-text placeholder in `output_path`, then delete any ``{{pie_*}}``
+    placeholder that wasn't filled (a pipe that doesn't exist).
 
-    Returns the number of pies placed. Pipes whose sheet is missing are skipped
-    (their section — and placeholder — was already removed)."""
+    Omission keys off each placeholder's own Alt Text, so the template needs no
+    ``{{<role>_start}}…{{<role>_end}}`` markers around the charts — which aren't
+    practical when the pies are arranged side-by-side. Returns the count placed."""
     log = progress or print
     rev = review or (lambda m: None)
 
     import openpyxl
     from docx import Document
-    from .images import place_images_by_alttext
+    from .images import place_images_by_alttext, remove_unfilled_alttext_placeholders
 
     wb = openpyxl.load_workbook(excel_path, data_only=True)
     sheets = set(wb.sheetnames)
@@ -254,14 +261,18 @@ def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=
             log(f"Rendered pie for {p['suffix']} "
                 f"(A={counts['A']} B={counts['B']} C={counts['C']} D={counts['D']})")
 
-        if not tag_to_file:
-            return 0
-
         doc = Document(output_path)
-        placed, skipped, missing = place_images_by_alttext(
-            doc, tmp, tag_to_file, progress=log, review=rev)
-        doc.save(output_path)
+        placed, skipped = 0, 0
+        if tag_to_file:
+            placed, skipped, _missing = place_images_by_alttext(
+                doc, tmp, tag_to_file, progress=log, review=rev)
+        # Sweep out every pie placeholder we didn't fill — the absent pipes.
+        removed = remove_unfilled_alttext_placeholders(
+            doc, set(tag_to_file), _PIE_PLACEHOLDER, progress=log)
+        if placed or removed:
+            doc.save(output_path)
         rev(f"Pie charts — placed {placed}"
+            + (f", {removed} un-inserted removed" if removed else "")
             + (f", {skipped} placeholder(s) missing" if skipped else ""))
         return placed
     finally:
