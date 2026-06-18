@@ -129,7 +129,7 @@ def render_pie(pipe, counts, out_path):
     # the table, the table spanning the full image width. set_aspect("equal")
     # keeps the pie a true circle (height-constrained here), so it is never
     # stretched. The pie box height (~0.39) sets the circle's diameter.
-    ax_pie = fig.add_axes([0.21, 0.40, 0.46, 0.39])
+    ax_pie = fig.add_axes([0.18, 0.36, 0.52, 0.44])
     ax_tab = fig.add_axes([0.01, 0.02, 0.98, 0.30])
     ax_tab.axis("off")
 
@@ -198,24 +198,24 @@ def render_pie(pipe, counts, out_path):
     # Give every row an explicit height in axes-fraction units so the table
     # exactly fills its band (no overflow that would clip the Total row). The
     # header counts as two units, making it twice as tall as a normal row.
-    # Fonts: header Calibri 11 bold; grade letters and the Total row Tahoma 10
-    # bold; all other data cells Calibri 10.
+    # Fonts: header Calibri 9 bold; grade letters and the Total row Tahoma 8
+    # bold; all other data cells Calibri 8.
     n_rows = len(cell_text)
     unit = 1.0 / (n_rows + 1)            # +1 because the header is double height
     for (r, c), cell in table.get_celld().items():
         cell.set_edgecolor("#BFBFBF")
         cell.set_height(2 * unit if r == 0 else unit)
-        if r == 0:                                   # header — Calibri 11 bold
-            cell.set_text_props(fontfamily="Calibri", fontsize=11,
+        if r == 0:                                   # header — Calibri 9 bold
+            cell.set_text_props(fontfamily="Calibri", fontsize=9,
                                 fontweight="bold", color="white")
-        elif r == n_rows - 1:                        # Total row — Tahoma 10 bold
-            cell.set_text_props(fontfamily="Tahoma", fontsize=10,
+        elif r == n_rows - 1:                        # Total row — Tahoma 8 bold
+            cell.set_text_props(fontfamily="Tahoma", fontsize=8,
                                 fontweight="bold")
-        elif c == 0:                                 # grade letter — Tahoma 10 bold
-            cell.set_text_props(fontfamily="Tahoma", fontsize=10,
+        elif c == 0:                                 # grade letter — Tahoma 8 bold
+            cell.set_text_props(fontfamily="Tahoma", fontsize=8,
                                 fontweight="bold")
-        else:                                        # data — Calibri 10
-            cell.set_text_props(fontfamily="Calibri", fontsize=10)
+        else:                                        # data — Calibri 8
+            cell.set_text_props(fontfamily="Calibri", fontsize=8)
 
     # Save at the exact figure size (no tight crop) so the image is precisely
     # _IMG_W_IN x _IMG_H_IN; the axes layout already removes side padding.
