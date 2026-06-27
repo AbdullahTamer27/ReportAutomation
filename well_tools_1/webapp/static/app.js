@@ -66,6 +66,7 @@ const els = {
   company: $("companySelect"),
   damageCount: $("damageCount"),
   includeDisclaimer: $("includeDisclaimer"),
+  wellheadDamage: $("wellheadDamage"),
   templateHint: $("templateHint"),
   companyHint: $("companyHint"),
   generate: $("generate"),
@@ -407,6 +408,7 @@ async function generate() {
         well_type: els.wellType.value.trim() || null,
         btm_depth: els.btmDepth.value.trim() || null,
         field: els.fieldName.value.trim() || null,
+        wellhead_damage: els.wellheadDamage.checked,
         config: configValue() || null,
       }),
     });

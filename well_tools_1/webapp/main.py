@@ -90,6 +90,7 @@ class GenerateRequest(BaseModel):
     well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
     field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
+    wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
 
 
 class GenerateResponse(BaseModel):
@@ -563,6 +564,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             conditional_lines=conditional_lines,
             pipe_model=pipe_model,
             text_fields_quiet=text_fields_quiet,
+            wellhead_damage=req.wellhead_damage,
             progress=on_progress,
             review=on_review,
         )

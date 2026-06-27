@@ -55,7 +55,7 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                             include_disclaimer=False, company_logo_path=None,
                             company_name=None, text_fields=None,
                             conditional_lines=None, pipe_model=None,
-                            text_fields_quiet=None):
+                            text_fields_quiet=None, wellhead_damage=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -153,6 +153,13 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         log("Rendering per-pipe pie charts…")
         from . import charts
         charts.place_pie_charts(output_path, pipe_model, excel_data_path,
+                                progress=log, review=review)
+
+    # ---- 2.9) Floating overlays ({{ovl_*}}) — self-contained pass ----
+    if wellhead_damage is not None:
+        log("Filling overlay text boxes…")
+        from . import overlays
+        overlays.apply_overlays(output_path, wellhead_damage=wellhead_damage,
                                 progress=log, review=review)
 
     log(f"Done → {output_path}")
