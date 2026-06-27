@@ -13,6 +13,7 @@ callable (`fill_report_tables`) so the report builder / UI can drive it, with
 
 import re
 import copy
+import statistics
 
 import openpyxl
 from docx import Document
@@ -54,9 +55,14 @@ def _max_bar_chars():
 
 MAX_BAR_CHARS = _max_bar_chars()
 
-# Valid joint (body) length range, in feet. Outside this gets flagged.
-BODY_LEN_MIN = 28.0
-BODY_LEN_MAX = 45.0
+# Joint (body) length is checked RELATIVE to the string's own typical (median)
+# length, not a fixed range — so a 28 ft tubing or a 60 ft casing string doesn't
+# fire wholesale; only joints that deviate from their neighbours are flagged.
+# The band is asymmetric: joints legitimately run short (pup / shoe joints), so
+# allow more slack below the median; an over-length joint is more suspicious.
+BODY_LEN_SHORT_TOL = 0.15      # flag if > 15% SHORTER than the string median
+BODY_LEN_LONG_TOL = 0.10       # flag if > 10% LONGER than the string median
+BODY_LEN_MIN_SAMPLE = 4        # need at least this many joints to trust a median
 
 
 def grade_for_loss(loss):
@@ -77,9 +83,26 @@ def _joint_label(vals):
     return jn
 
 
-def review_row(table_name, vals, review):
+def typical_body_length(data_rows):
+    """The string's typical joint length = median of its real joints' body
+    lengths. Returns None if there are too few to establish a norm."""
+    lengths = [
+        v[BODY_LEN_IDX] for v in data_rows
+        if not is_excluded(v)
+        and isinstance(v[BODY_LEN_IDX], (int, float)) and v[BODY_LEN_IDX] > 0
+    ]
+    if len(lengths) < BODY_LEN_MIN_SAMPLE:
+        return None
+    return statistics.median(lengths)
+
+
+def review_row(table_name, vals, review, typical_len=None):
     """Sanity-check one real (non-excluded) data row. Corrects vals[GRADE_IDX]
-    in place when it disagrees with Max Loss (%). Emits messages via review(msg)."""
+    in place when it disagrees with Max Loss (%). Emits messages via review(msg).
+
+    `typical_len` (the string's median joint length) enables the body-length
+    check; when omitted (e.g. the highest-loss table, which the joints table
+    already covers) the length check is skipped."""
     if review is None:
         return
     jn = _joint_label(vals)
@@ -89,11 +112,14 @@ def review_row(table_name, vals, review):
         if isinstance(v, (int, float)) and v < 0:
             review(f"⚠ {table_name} joint {jn}: negative {COLUMN_NAMES[i]} ({v})")
 
-    # Joint (body) length out of range — only when it actually has a value.
+    # Body length vs the string's own typical length — asymmetric band.
     bl = vals[BODY_LEN_IDX]
-    if isinstance(bl, (int, float)) and not (BODY_LEN_MIN <= bl <= BODY_LEN_MAX):
-        review(f"⚠ {table_name} joint {jn}: Body Length {bl:.1f} ft out of range "
-               f"({BODY_LEN_MIN:.0f}–{BODY_LEN_MAX:.0f})")
+    if typical_len and isinstance(bl, (int, float)) and bl > 0:
+        low = typical_len * (1 - BODY_LEN_SHORT_TOL)
+        high = typical_len * (1 + BODY_LEN_LONG_TOL)
+        if bl < low or bl > high:
+            review(f"⚠ {table_name} joint {jn}: Body Length {bl:.1f} ft is off this "
+                   f"string's typical {typical_len:.1f} ft (expected {low:.1f}–{high:.1f})")
 
     # Grade vs Max Loss (%) — correct the grade, never the value.
     loss = vals[MAX_LOSS_IDX]
@@ -246,6 +272,7 @@ def fill_table(table, data_rows, table_name=None, review=None):
     """Fill a tagged table with data_rows using the cloned-style-row approach.
     Real data rows are sanity-checked (and grade-corrected) via review_row."""
     template_row = table.rows[1]   # the single styled data row
+    typical_len = typical_body_length(data_rows)   # string's median joint length
     for vals in data_rows:
         new_row = clone_row(table, template_row)
         cells = new_row.cells
@@ -265,7 +292,7 @@ def fill_table(table, data_rows, table_name=None, review=None):
             run.font.name = "Calibri"; run.font.size = Pt(10)
         else:
             # Review + correct grade before writing the cells.
-            review_row(table_name, vals, review)
+            review_row(table_name, vals, review, typical_len=typical_len)
             for i in range(10):
                 text = fmt(vals[i], i)
                 # Cap the Damage Profile bar so a long bar can't widen/wrap the cell.
