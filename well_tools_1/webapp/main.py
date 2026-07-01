@@ -91,6 +91,7 @@ class GenerateRequest(BaseModel):
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
     field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
     wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
+    xml_path: str | None = Field(None, description="WellSchematic XML; when given, the Raw Data sheet is (re)written into the data Excel")
 
 
 class GenerateResponse(BaseModel):
@@ -587,6 +588,21 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
             text_fields[tag] = sizes_list_string(pipe_model, code)
             text_fields_quiet.add(tag)
+
+    # Fold in the Interval Generator: (re)write the 'Raw Data' sheet into the data
+    # Excel from the schematic XML. Non-fatal — the report never depends on it.
+    if req.xml_path:
+        try:
+            generate_raw_data(req.xml_path, req.excel_path)
+            review_notes.append(f"Raw Data sheet written to {os.path.basename(req.excel_path)}.")
+        except PermissionError:
+            review_notes.append("⚠ Raw Data not written — the data Excel is open. "
+                                "Close it and regenerate to refresh the sheet.")
+        except IntervalInputError as e:
+            review_notes.append(f"⚠ Raw Data not written — {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Raw Data write failed")
+            review_notes.append(f"⚠ Raw Data not written — {e}")
 
     try:
         output_path = build_automation_report(

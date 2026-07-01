@@ -446,11 +446,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 .hint-warn { color: var(--error-fg); font-weight: 600; }
 
 /* ===== Info card (image naming guide) ===== */
+/* A plain section inside the help/setup card — no box of its own, so the aside
+   reads as a single card (help + setup), not a card-within-a-card. */
 .info-card {
-  background: var(--info-bg);
-  border: 1px solid var(--info-bd);
-  border-radius: var(--radius-sm);
-  padding: 16px 18px;
+  padding: 0;
   margin-bottom: 20px;
 }
 .info-card-title {

@@ -18,10 +18,6 @@
           <span class="mode-title">Report Automation</span>
           <span class="mode-desc">Generate a well-integrity report from a template, Excel data, and images.</span>
         </button>
-        <button type="button" class="mode-card" id="modeInterval">
-          <span class="mode-title">Interval Generator</span>
-          <span class="mode-desc">Build depth-interval tables from WellSchematic XML.</span>
-        </button>
         <button type="button" class="mode-card" id="modeGhost">
           <span class="mode-title">Ghost Merger</span>
           <span class="mode-desc">Merge ghost-collar intervals in a SmartLog Joint-Analysis CSV into a clean Excel.</span>
@@ -112,37 +108,6 @@
     </main>
   </section>
 
-  <!-- ===== View: Interval Generator ===== -->
-  <section id="view-interval" class="view" hidden>
-    <main class="card card-wide">
-      <header>
-        <button type="button" class="link-back" data-nav="mode">← Back</button>
-        <h1>Interval Generator</h1>
-        <p class="subtitle">Build the “Raw Data” sheet from a WellSchematic XML into your Excel template — updated in place. The rest of the workbook is untouched.</p>
-      </header>
-
-      <section class="field">
-        <label>WellSchematic XML</label>
-        <div class="picker">
-          <button id="pickXml" type="button" class="secondary">Choose XML…</button>
-          <span id="xmlPath" class="path muted">No file selected</span>
-        </div>
-      </section>
-
-      <section class="field">
-        <label>Excel template</label>
-        <div class="picker">
-          <button id="pickTemplate" type="button" class="secondary">Choose Template…</button>
-          <span id="templatePath" class="path muted">No file selected</span>
-        </div>
-      </section>
-
-      <button id="intervalGenerate" type="button" class="primary">Generate Raw Data</button>
-      <div id="intervalStatus" class="status" hidden></div>
-      <pre id="intervalPreview" class="preview-text" hidden></pre>
-    </main>
-  </section>
-
   <!-- ===== View: Ghost Merger ===== -->
   <section id="view-ghost" class="view" hidden>
     <main class="card card-wide">
@@ -204,22 +169,24 @@
           <p id="templatePickHint" class="hint"></p>
         </section>
 
-        <section class="field">
-          <label>Well schematic PDF <span class="opt">(optional)</span></label>
-          <div class="picker">
-            <button id="loadSchematic" type="button" class="secondary">Load from schematic PDF…</button>
-          </div>
-          <p id="schematicHint" class="hint">Pulls well name, type, and completion/workover dates from a Well Cross Section Plot PDF into the optional fields — review before generating.</p>
-        </section>
+        <div class="field-row">
+          <section class="field">
+            <label>Well schematic PDF <span class="opt">(optional)</span></label>
+            <div class="picker">
+              <button id="loadSchematic" type="button" class="secondary">Load from schematic PDF…</button>
+            </div>
+            <p id="schematicHint" class="hint">Pulls well name, type, and completion/workover dates from a Well Cross Section Plot PDF into the optional fields — review before generating.</p>
+          </section>
 
-        <section class="field">
-          <label>Well schematic XML <span class="opt">(optional — auto damage count)</span></label>
-          <div class="picker">
-            <button id="pickXmlReport" type="button" class="secondary">Choose XML…</button>
-            <span id="xmlReportPath" class="path muted">No file selected</span>
-          </div>
-          <p id="damageAutoHint" class="hint">Sets the number of damages automatically — worst Class C/D damage per pipe, per interval (clustered within 200&nbsp;ft). You can still override it.</p>
-        </section>
+          <section class="field">
+            <label>Well schematic XML <span class="opt">(optional)</span></label>
+            <div class="picker">
+              <button id="pickXmlReport" type="button" class="secondary">Choose XML…</button>
+              <span id="xmlReportPath" class="path muted">No file selected</span>
+            </div>
+            <p id="damageAutoHint" class="hint">Auto-sets the number of damages — worst Class C/D per pipe, per interval (within 200&nbsp;ft). Override anytime.</p>
+          </section>
+        </div>
 
         <button id="toWorkspace" type="button" class="primary">Continue</button>
         <div id="inputsStatus" class="status" hidden></div>

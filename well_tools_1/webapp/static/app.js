@@ -6,7 +6,6 @@ const $ = (id) => document.getElementById(id);
 const els = {
   // mode
   modeReport: $("modeReport"),
-  modeInterval: $("modeInterval"),
   modeGhost: $("modeGhost"),
   // ghost merger
   ghostLength: $("ghostLength"),
@@ -33,14 +32,6 @@ const els = {
   cmRegister: $("cmRegister"),
   cmStatus: $("cmStatus"),
   cmList: $("cmList"),
-  // interval generator
-  pickXml: $("pickXml"),
-  xmlPath: $("xmlPath"),
-  pickTemplate: $("pickTemplate"),
-  templatePath: $("templatePath"),
-  intervalGenerate: $("intervalGenerate"),
-  intervalStatus: $("intervalStatus"),
-  intervalPreview: $("intervalPreview"),
   // inputs
   pickExcel: $("pickExcel"),
   excelPath: $("excelPath"),
@@ -91,7 +82,6 @@ const state = {
   configOk: false,   // config parsed AND every configured pipe has its Excel sheet
 };
 
-const ivState = { xmlPath: null, templatePath: null };
 const ghostState = { csvPath: null };
 const tmState = { filePath: null };
 const cmState = { filePath: null };
@@ -102,7 +92,7 @@ function pyapi() {
 }
 
 // --- View navigation --------------------------------------------------------
-const VIEWS = ["mode", "interval", "ghost", "inputs", "workspace", "templates", "companies"];
+const VIEWS = ["mode", "ghost", "inputs", "workspace", "templates", "companies"];
 function showView(name) {
   for (const v of VIEWS) {
     const el = document.getElementById(`view-${v}`);
@@ -462,6 +452,7 @@ async function generate() {
         btm_depth: els.btmDepth.value.trim() || null,
         field: els.fieldName.value.trim() || null,
         wellhead_damage: els.wellheadDamage.checked,
+        xml_path: state.xmlPath || null,
         config: configValue() || null,
       }),
     });
@@ -804,91 +795,6 @@ function cmShowStatus(kind, msg) {
   els.cmStatus.innerHTML = escapeHtml(msg);
 }
 
-// --- Interval Generator -----------------------------------------------------
-async function pickXml() {
-  const api = pyapi();
-  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
-  const p = await api.pick_file(["XML files (*.xml)", "All files (*.*)"]);
-  if (p) {
-    ivState.xmlPath = p;
-    els.xmlPath.textContent = p;
-    els.xmlPath.classList.remove("muted");
-  }
-}
-
-async function pickTemplate() {
-  const api = pyapi();
-  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
-  const p = await api.pick_file(["Excel files (*.xlsx;*.xlsm)", "All files (*.*)"]);
-  if (p) {
-    ivState.templatePath = p;
-    els.templatePath.textContent = p;
-    els.templatePath.classList.remove("muted");
-  }
-}
-
-async function intervalGenerate() {
-  if (!ivState.xmlPath) return intervalError("Please choose a WellSchematic XML file.");
-  if (!ivState.templatePath) return intervalError("Please choose an Excel template.");
-
-  setIntervalLoading(true);
-  intervalStatus("info", `<span class="spinner"></span> Generating Raw Data…`);
-  els.intervalPreview.hidden = true;
-
-  try {
-    const res = await fetch("/api/interval/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        xml_path: ivState.xmlPath,
-        template_path: ivState.templatePath,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      intervalError(data && data.detail ? data.detail : `HTTP ${res.status}`);
-      return;
-    }
-    intervalSuccess(data);
-  } catch (err) {
-    intervalError(`Request failed: ${err.message || err}`);
-  } finally {
-    setIntervalLoading(false);
-  }
-}
-
-function intervalSuccess(data) {
-  const types = Object.entries(data.pipe_types)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(", ");
-  intervalStatus(
-    "success",
-    `<strong>Raw Data updated in place</strong>
-     <div class="result-path">${escapeHtml(data.template_path)}</div>
-     <div class="iv-summary">${data.num_pipes} pipes (${escapeHtml(types)}) • ${data.num_intervals} intervals • ${data.depth_min.toFixed(0)}–${data.depth_max.toFixed(0)} ft<br>${escapeHtml(data.thickness_note)}</div>
-     <button id="ivRevealBtn" type="button" class="secondary">Reveal in file manager</button>`
-  );
-  const btn = $("ivRevealBtn");
-  if (btn) btn.addEventListener("click", () => reveal(data.template_path));
-  els.intervalPreview.hidden = false;
-  els.intervalPreview.textContent = data.preview;
-}
-
-function intervalStatus(kind, html) {
-  els.intervalStatus.hidden = false;
-  els.intervalStatus.className = `status ${kind}`;
-  els.intervalStatus.innerHTML = html;
-}
-function intervalError(msg) {
-  intervalStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
-}
-function setIntervalLoading(loading) {
-  els.intervalGenerate.disabled = loading;
-  els.pickXml.disabled = loading;
-  els.pickTemplate.disabled = loading;
-  els.intervalGenerate.textContent = loading ? "Working…" : "Generate Raw Data";
-}
-
 // --- Ghost Merger -----------------------------------------------------------
 async function pickGhostCsv() {
   const api = pyapi();
@@ -971,7 +877,6 @@ els.modeReport.addEventListener("click", () => {
   showView("inputs");
   ensureTemplates().catch((err) => inputsError(err.message || String(err)));
 });
-els.modeInterval.addEventListener("click", () => showView("interval"));
 els.modeGhost.addEventListener("click", () => showView("ghost"));
 els.openTemplates.addEventListener("click", () => showView("templates"));
 els.openCompanies.addEventListener("click", () => showView("companies"));
@@ -984,10 +889,6 @@ els.cmRegister.addEventListener("click", cmRegister);
 document.querySelectorAll("[data-nav]").forEach((b) =>
   b.addEventListener("click", () => showView(b.getAttribute("data-nav")))
 );
-
-els.pickXml.addEventListener("click", pickXml);
-els.pickTemplate.addEventListener("click", pickTemplate);
-els.intervalGenerate.addEventListener("click", intervalGenerate);
 
 els.pickGhostCsv.addEventListener("click", pickGhostCsv);
 els.ghostMerge.addEventListener("click", ghostMerge);
