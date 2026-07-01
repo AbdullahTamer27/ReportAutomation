@@ -153,13 +153,15 @@ function resolveCompany() {
 }
 
 function refreshCompanyHint() {
-  if (!state.companies.length) {
-    els.companyHint.textContent =
-      "No companies registered — add one in the Company Manager before generating.";
-    els.companyHint.classList.add("hint-warn");
-  } else {
-    els.companyHint.textContent = "";
-    els.companyHint.classList.remove("hint-warn");
+  if (els.companyHint) {
+    if (!state.companies.length) {
+      els.companyHint.textContent =
+        "No companies registered — add one in the Company Manager before generating.";
+      els.companyHint.classList.add("hint-warn");
+    } else {
+      els.companyHint.textContent = "";
+      els.companyHint.classList.remove("hint-warn");
+    }
   }
   updateGenerateEnabled();
 }
@@ -181,8 +183,10 @@ function resolveTemplate() {
 
 function refreshTemplateHint() {
   const t = resolveTemplate();
-  els.templateHint.textContent = t ? `Template: ${t.name}` : "";
-  els.templateHint.classList.remove("hint-warn");
+  if (els.templateHint) {
+    els.templateHint.textContent = t ? `Template: ${t.name}` : "";
+    els.templateHint.classList.remove("hint-warn");
+  }
   updateGenerateEnabled();
 }
 
@@ -293,8 +297,10 @@ async function pickXmlReport() {
   const path = await api.pick_file(["WellSchematic XML (*.xml)", "All files (*.*)"]);
   if (!path) return;
   state.xmlPath = path;
-  els.xmlReportPath.textContent = path;
-  els.xmlReportPath.classList.remove("muted");
+  if (els.xmlReportPath) {
+    els.xmlReportPath.textContent = path;
+    els.xmlReportPath.classList.remove("muted");
+  }
   computeDamageCount();   // in case config is already set
 }
 
