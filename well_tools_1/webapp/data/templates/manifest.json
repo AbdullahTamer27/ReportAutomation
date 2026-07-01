@@ -1,10 +1,10 @@
 {
   "templates": [
     {
-      "name": "ePDT",
+      "name": "SAUDI",
       "damage_count": 0,
-      "config_key": "ePDT_Sam.le",
-      "filename": "ePDT_Sam.le.docx",
+      "config_key": "ePDT",
+      "filename": "ePDT.docx",
       "placeholders": []
     }
   ]
