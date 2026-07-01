@@ -50,7 +50,7 @@ from .registry import (  # noqa: E402
 )
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
-from .interval import generate_raw_data, IntervalInputError  # noqa: E402
+from .interval import generate_raw_data, generate_raw_data_file, IntervalInputError  # noqa: E402
 from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
 from well_tools.report.pipe_config import build_pipe_model, ConfigParseError  # noqa: E402
@@ -589,15 +589,21 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             text_fields[tag] = sizes_list_string(pipe_model, code)
             text_fields_quiet.add(tag)
 
-    # Fold in the Interval Generator: (re)write the 'Raw Data' sheet into the data
-    # Excel from the schematic XML. Non-fatal — the report never depends on it.
+    # Fold in the Interval Generator: build the Raw Data table from the XML into a
+    # SEPARATE workbook beside the report — the data Excel is never opened for
+    # writing, so its macro-computed grades/bars stay intact. Non-fatal.
     if req.xml_path:
+        stem = _safe_filename(req.well_name) if req.well_name else "well"
+        rawdata_path = os.path.join(req.working_dir, f"{stem}_RawData.xlsx")
         try:
-            generate_raw_data(req.xml_path, req.excel_path)
-            review_notes.append(f"Raw Data sheet written to {os.path.basename(req.excel_path)}.")
+            rd = generate_raw_data_file(req.xml_path, rawdata_path, data_excel=req.excel_path)
+            note = f"Raw Data written to {os.path.basename(rawdata_path)}"
+            note += " (with 'intervals MAIN')." if rd.get("intervals_main") \
+                else " — note: no 'intervals MAIN' sheet found in the data Excel."
+            review_notes.append(note)
         except PermissionError:
-            review_notes.append("⚠ Raw Data not written — the data Excel is open. "
-                                "Close it and regenerate to refresh the sheet.")
+            review_notes.append(f"⚠ Raw Data not written — {os.path.basename(rawdata_path)} "
+                                "is open. Close it and regenerate.")
         except IntervalInputError as e:
             review_notes.append(f"⚠ Raw Data not written — {e}")
         except Exception as e:  # noqa: BLE001
