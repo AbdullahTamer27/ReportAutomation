@@ -131,7 +131,10 @@ def review_row(table_name, vals, review, typical_len=None):
         if current != correct:
             review(f"✎ {table_name} joint {jn}: grade {current or '—'}→{correct} "
                    f"(Max Loss {loss:.1f}%) — corrected")
-            vals[GRADE_IDX] = correct
+        # Always write the canonical (uppercase) grade derived from the loss, even
+        # when it only differed in case/spacing — otherwise the cell keeps its odd
+        # form and its colour (looked up on uppercase A–D) is never applied.
+        vals[GRADE_IDX] = correct
 
 JOINTS_TAG = re.compile(r"\{\{joints_(\w+)\}\}")
 HIGHEST_TAG = re.compile(r"\{\{highest_(\w+)\}\}")
