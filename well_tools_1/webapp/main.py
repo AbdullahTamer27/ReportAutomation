@@ -175,6 +175,15 @@ class ConfigPreviewResponse(BaseModel):
     bottom_depth: str | None = None   # well's deepest point from the XML (for {{btm_depth}})
 
 
+class ConfigFromXmlRequest(BaseModel):
+    xml_path: str = Field(..., description="Absolute path to the WellSchematic XML")
+
+
+class ConfigFromXmlResponse(BaseModel):
+    config: str
+    pipes: int
+
+
 class DamageCountRequest(BaseModel):
     xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml (for intervals)")
     excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
@@ -317,6 +326,23 @@ def config_preview(req: ConfigPreviewRequest):
             logger.exception("Deepest-point read failed")
     return ConfigPreviewResponse(pipes=result["pipes"], warnings=result["warnings"],
                                  bottom_depth=bottom_depth)
+
+
+@app.post("/api/config/from-xml", response_model=ConfigFromXmlResponse)
+def config_from_xml(req: ConfigFromXmlRequest):
+    """Derive a configuration string from a WellSchematic XML (inner→outer order),
+    to pre-fill the Configuration field for the user to review. Read-only."""
+    if not req.xml_path or not os.path.isfile(req.xml_path):
+        raise HTTPException(status_code=400, detail="WellSchematic XML not found at that path.")
+    if not req.xml_path.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Please choose a .xml schematic file.")
+    try:
+        from well_tools.report.pipe_config import pipes_from_xml, config_string_from_pipes
+        pipes = pipes_from_xml(req.xml_path)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Config-from-XML failed")
+        raise HTTPException(status_code=500, detail=f"Could not derive the configuration: {e}")
+    return ConfigFromXmlResponse(config=config_string_from_pipes(pipes), pipes=len(pipes))
 
 
 @app.post("/api/damage/count", response_model=DamageCountResponse)

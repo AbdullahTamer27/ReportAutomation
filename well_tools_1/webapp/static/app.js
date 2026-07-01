@@ -312,7 +312,33 @@ async function pickXmlReport() {
     els.xmlReportPath.textContent = path;
     els.xmlReportPath.classList.remove("muted");
   }
-  computeDamageCount();   // in case config is already set
+  await deriveConfigFromXml();   // pre-fill Configuration, then preview it
+}
+
+// Derive the configuration string from the XML and drop it into the field.
+async function deriveConfigFromXml() {
+  if (!state.xmlPath || !els.configInput) return computeDamageCount();
+  try {
+    const res = await fetch("/api/config/from-xml", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml_path: state.xmlPath }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.config) {
+      els.configInput.value = data.config;
+      els.configInput.classList.add("prefilled");
+      if (els.damageAutoHint) {
+        els.damageAutoHint.textContent = `Configuration set from the schematic: ${data.config} — review it.`;
+        els.damageAutoHint.classList.remove("hint-warn");
+      }
+      scheduleConfigPreview();   // validates + auto damage count + bottom depth
+    } else {
+      computeDamageCount();      // couldn't derive — use whatever config is there
+    }
+  } catch (err) {
+    computeDamageCount();
+  }
 }
 
 async function computeDamageCount() {
@@ -918,6 +944,7 @@ els.toWorkspace.addEventListener("click", toWorkspace);
 
 els.templateSelect.addEventListener("change", refreshTemplateHint);
 els.configInput.addEventListener("input", scheduleConfigPreview);
+els.configInput.addEventListener("input", () => els.configInput.classList.remove("prefilled"));
 els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 
