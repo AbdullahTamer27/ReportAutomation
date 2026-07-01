@@ -216,6 +216,23 @@
         <div id="inputsStatus" class="status" hidden></div>
       </main>
 
+      <!-- Middle: intervals / autonomous damage count -->
+      <section class="card card-half">
+        <header>
+          <h2>Intervals &amp; damage count</h2>
+          <p class="subtitle">Optional — fills the damage count automatically.</p>
+        </header>
+
+        <section class="field">
+          <label>Well schematic (XML)</label>
+          <div class="picker">
+            <button id="pickXmlReport" type="button" class="secondary">Choose XML…</button>
+            <span id="xmlReportPath" class="path muted">No file selected</span>
+          </div>
+          <p id="damageAutoHint" class="hint">With the schematic XML, the number of damages is computed from the worst Class C/D damage per pipe, per interval (clustered within 200&nbsp;ft). You can still override it.</p>
+        </section>
+      </section>
+
       <!-- Right half: instructions + sub-feature managers -->
       <aside class="card card-half">
         <section class="info-card">
@@ -290,6 +307,7 @@
         <section class="field">
           <label for="damageCount">Number of damages</label>
           <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
+          <p id="damageCountHint" class="hint"></p>
         </section>
 
         <p id="templateHint" class="hint"></p>

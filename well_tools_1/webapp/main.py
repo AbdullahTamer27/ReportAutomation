@@ -170,6 +170,18 @@ class ConfigPreviewResponse(BaseModel):
     warnings: list[str]
 
 
+class DamageCountRequest(BaseModel):
+    xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml (for intervals)")
+    excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
+    config: str = Field(..., description="Configuration string (to resolve pipe sheets)")
+
+
+class DamageCountResponse(BaseModel):
+    count: int
+    manifest: list[str]
+    warnings: list[str]
+
+
 class SchematicRequest(BaseModel):
     pdf_path: str = Field(..., description="Absolute path to the well-schematic PDF")
 
@@ -289,6 +301,32 @@ def config_preview(req: ConfigPreviewRequest):
         logger.exception("Config preview failed")
         raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
     return ConfigPreviewResponse(**result)
+
+
+@app.post("/api/damage/count", response_model=DamageCountResponse)
+def damage_count(req: DamageCountRequest):
+    """Autonomous damage count: worst Class C/D damage per (interval, pipe),
+    clustered within 200 ft into 'damage pictures'. Returns the picture count
+    (which pre-fills the manual field) and a per-picture manifest. Read-only."""
+    if not req.xml_path or not os.path.isfile(req.xml_path):
+        raise HTTPException(status_code=400, detail="WellSchematic XML not found at that path.")
+    if not req.xml_path.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Please choose a .xml schematic file.")
+    if not req.excel_path or not os.path.isfile(req.excel_path):
+        raise HTTPException(status_code=400, detail="Excel data file not found.")
+    try:
+        pm = build_pipe_model(req.config, req.excel_path)
+    except ConfigParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        from well_tools.report.damage_select import compute_damage_pictures, manifest_lines
+        res = compute_damage_pictures(req.xml_path, req.excel_path, pm["pipes"])
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Damage count failed")
+        raise HTTPException(status_code=500, detail=f"Could not compute the damage count: {e}")
+    return DamageCountResponse(count=res["count"],
+                               manifest=manifest_lines(res["pictures"]),
+                               warnings=res["warnings"])
 
 
 @app.post("/api/schematic/parse", response_model=SchematicResponse)

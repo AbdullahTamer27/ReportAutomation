@@ -156,10 +156,11 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                                 progress=log, review=review)
 
     # ---- 2.9) Floating overlays ({{ovl_*}}) — self-contained pass ----
-    if wellhead_damage is not None:
+    if wellhead_damage is not None or pipe_model is not None:
         log("Filling overlay text boxes…")
         from . import overlays
         overlays.apply_overlays(output_path, wellhead_damage=wellhead_damage,
+                                pipe_model=pipe_model, excel_path=excel_data_path,
                                 progress=log, review=review)
 
     log(f"Done → {output_path}")

@@ -46,6 +46,10 @@ const els = {
   excelPath: $("excelPath"),
   workingDirInput: $("workingDirInput"),
   browseFolder: $("browseFolder"),
+  pickXmlReport: $("pickXmlReport"),
+  xmlReportPath: $("xmlReportPath"),
+  damageAutoHint: $("damageAutoHint"),
+  damageCountHint: $("damageCountHint"),
   templateSelect: $("templateSelect"),
   templatePickHint: $("templatePickHint"),
   toWorkspace: $("toWorkspace"),
@@ -83,6 +87,7 @@ const state = {
   companies: [],
   companiesLoaded: false,
   excelPath: null,
+  xmlPath: null,     // optional WellSchematic XML → autonomous damage count
   configOk: false,   // config parsed AND every configured pipe has its Excel sheet
 };
 
@@ -264,6 +269,7 @@ function renderConfigPreview(data) {
     `<div class="cfg-title">${data.pipes.length} pipe${data.pipes.length === 1 ? "" : "s"}</div>
      <ul class="cfg-list">${items}${warns}</ul>${blocked}`;
   updateGenerateEnabled();
+  if (state.configOk) computeDamageCount();   // refresh the auto damage count
 }
 
 function damageCountValue() {
@@ -289,6 +295,53 @@ async function browseFolder() {
   const path = await api.pick_folder();
   if (path) els.workingDirInput.value = path;
 }
+
+// --- WellSchematic XML → autonomous damage count ----------------------------
+async function pickXmlReport() {
+  const api = pyapi();
+  if (!api) return inputsError("Native file dialogs are only available in the desktop app.");
+  const path = await api.pick_file(["WellSchematic XML (*.xml)", "All files (*.*)"]);
+  if (!path) return;
+  state.xmlPath = path;
+  els.xmlReportPath.textContent = path;
+  els.xmlReportPath.classList.remove("muted");
+  computeDamageCount();   // in case config is already set
+}
+
+async function computeDamageCount() {
+  // Needs the XML, the Excel, and a validated config (pipe sheets resolve).
+  if (!state.xmlPath || !state.excelPath || !configValue() || !state.configOk) return;
+  els.damageCountHint.textContent = "Computing damage count…";
+  els.damageCountHint.classList.remove("hint-warn");
+  try {
+    const res = await fetch("/api/damage/count", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml_path: state.xmlPath, excel_path: state.excelPath, config: configValue() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      els.damageCountHint.textContent = data.detail || `Couldn't compute (HTTP ${res.status})`;
+      els.damageCountHint.classList.add("hint-warn");
+      return;
+    }
+    els.damageCount.value = String(data.count);
+    els.damageCount.classList.add("prefilled");
+    const warn = (data.warnings && data.warnings.length) ? "  ⚠ " + data.warnings.join("  ") : "";
+    els.damageCountHint.textContent =
+      `Auto-set to ${data.count} from the schematic — worst Class C/D per pipe per interval. Override if needed.${warn}`;
+    els.damageCountHint.classList.toggle("hint-warn", !!warn);
+  } catch (err) {
+    els.damageCountHint.textContent = err.message || String(err);
+    els.damageCountHint.classList.add("hint-warn");
+  }
+}
+
+// Clear the auto-fill highlight/hint once the user edits the count themselves.
+els.damageCount.addEventListener("input", () => {
+  els.damageCount.classList.remove("prefilled");
+  els.damageCountHint.textContent = "";
+});
 
 // --- Load optional fields from a well-schematic PDF -------------------------
 const SCHEMATIC_FIELDS = {        // response key -> input element
@@ -941,6 +994,7 @@ els.ghostMerge.addEventListener("click", ghostMerge);
 
 els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
+els.pickXmlReport.addEventListener("click", pickXmlReport);
 els.loadSchematic.addEventListener("click", pickSchematic);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
