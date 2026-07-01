@@ -212,7 +212,7 @@ async function previewConfig() {
     const res = await fetch("/api/config/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ config: cfg, excel_path: state.excelPath }),
+      body: JSON.stringify({ config: cfg, excel_path: state.excelPath, xml_path: state.xmlPath }),
     });
     const data = await res.json().catch(() => ({}));
     els.configPreview.hidden = false;
@@ -264,6 +264,17 @@ function renderConfigPreview(data) {
      <ul class="cfg-list">${items}${warns}</ul>${blocked}`;
   updateGenerateEnabled();
   if (state.configOk) computeDamageCount();   // refresh the auto damage count
+  // Auto-fill Bottom depth from the XML's deepest point (until the user edits it).
+  if (data.bottom_depth && els.btmDepth &&
+      (!els.btmDepth.value || els.btmDepth.classList.contains("prefilled"))) {
+    els.btmDepth.value = data.bottom_depth;
+    els.btmDepth.classList.add("prefilled");
+  }
+}
+
+// Once the user edits Bottom depth themselves, stop auto-filling it.
+if (els.btmDepth) {
+  els.btmDepth.addEventListener("input", () => els.btmDepth.classList.remove("prefilled"));
 }
 
 function damageCountValue() {

@@ -111,11 +111,15 @@ def _shoe_hanger_mapping(pipe_model, excel_path):
                     f"{name} Shoe at {_format_depth(shoe)}ft"
                 )
 
-        # Hanger callout — liners only; hanger depth = top of the liner.
+        # Hanger callout — liners only; hanger depth = top of the liner. Prefer
+        # the XML top depth (authoritative, set on the pipe model); fall back to
+        # the Excel min Top Body only if the XML didn't supply it.
         if p.get("type") == "LNR":
-            if wb is None:
-                wb = _load_wb(excel_path)
-            hang = _min_top_body(wb, p.get("sheet"))
+            hang = p.get("hanger")
+            if hang is None:
+                if wb is None:
+                    wb = _load_wb(excel_path)
+                hang = _min_top_body(wb, p.get("sheet"))
             if isinstance(hang, (int, float)):
                 mapping[f"{{{{ovl_hanger_{role}}}}}"] = (
                     f"{name} Hanger at {_format_depth(hang)}ft"

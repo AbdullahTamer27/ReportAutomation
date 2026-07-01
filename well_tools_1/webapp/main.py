@@ -53,7 +53,9 @@ from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  #
 from .interval import generate_raw_data, generate_raw_data_file, IntervalInputError  # noqa: E402
 from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
-from well_tools.report.pipe_config import build_pipe_model, ConfigParseError  # noqa: E402
+from well_tools.report.pipe_config import (  # noqa: E402
+    build_pipe_model, ConfigParseError, deepest_point_from_xml, format_depth,
+)
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -148,6 +150,7 @@ class CompanyRegisterResponse(BaseModel):
 class ConfigPreviewRequest(BaseModel):
     config: str = Field(..., description="Configuration string, e.g. 4.5x3.5TBG-7LNR-9.625")
     excel_path: str | None = Field(None, description="Optional workbook to read shoe depth / joint counts")
+    xml_path: str | None = Field(None, description="Optional WellSchematic XML; overrides shoe depths with exact values")
 
 
 class PipeOut(BaseModel):
@@ -169,6 +172,7 @@ class PipeOut(BaseModel):
 class ConfigPreviewResponse(BaseModel):
     pipes: list[PipeOut]
     warnings: list[str]
+    bottom_depth: str | None = None   # well's deepest point from the XML (for {{btm_depth}})
 
 
 class DamageCountRequest(BaseModel):
@@ -295,13 +299,24 @@ def config_preview(req: ConfigPreviewRequest):
     given, each pipe's shoe depth + joint count) so the UI can show the mapping
     before generating. Read-only."""
     try:
-        result = build_pipe_model(req.config, req.excel_path)
+        result = build_pipe_model(req.config, req.excel_path, xml_path=req.xml_path)
     except ConfigParseError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:  # noqa: BLE001
         logger.exception("Config preview failed")
         raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
-    return ConfigPreviewResponse(**result)
+
+    # Well bottom depth = the XML's deepest point (for the {{btm_depth}} field).
+    bottom_depth = None
+    if req.xml_path and os.path.isfile(req.xml_path):
+        try:
+            d = deepest_point_from_xml(req.xml_path)
+            if d is not None:
+                bottom_depth = f"{format_depth(d)} ft"
+        except Exception:  # noqa: BLE001
+            logger.exception("Deepest-point read failed")
+    return ConfigPreviewResponse(pipes=result["pipes"], warnings=result["warnings"],
+                                 bottom_depth=bottom_depth)
 
 
 @app.post("/api/damage/count", response_model=DamageCountResponse)
@@ -573,7 +588,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     if req.config and req.config.strip():
         from well_tools.report.pipe_config import sizes_list_string  # noqa: E402
         try:
-            pm = build_pipe_model(req.config, req.excel_path, review=on_review)
+            pm = build_pipe_model(req.config, req.excel_path, review=on_review,
+                                  xml_path=req.xml_path)
         except ConfigParseError as e:
             raise HTTPException(status_code=400, detail=f"Configuration: {e}")
         pipe_model = pm["pipes"]
