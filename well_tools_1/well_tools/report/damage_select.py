@@ -57,6 +57,24 @@ def _cd_damages(excel_path, pipes):
     return out
 
 
+def _thickness_sections(excel_path):
+    """THICKNESS sections from the data Excel (read-only), or None if absent."""
+    try:
+        from well_tools.core.thickness import parse_thickness_sections
+        return parse_thickness_sections(excel_path) or None
+    except Exception:  # noqa: BLE001 — no/unreadable THICKNESS sheet
+        return None
+
+
+def _resolve_channel(sections, od, intervals, iv):
+    """Dominant THICKNESS channel for a pipe of `od` across interval `iv`."""
+    if not sections or od is None or iv is None:
+        return None
+    from well_tools.core.thickness import _mode_for_pipe, _format_channel
+    start, end = intervals[iv]
+    return _mode_for_pipe(sections, od, start, end, "channel", _format_channel)
+
+
 def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WINDOW_FT):
     """Return {pictures, count, warnings}. `pictures` is a list of clusters; each
     cluster is a list of damage dicts that share one picture."""
@@ -80,6 +98,15 @@ def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WIND
     if skipped:
         warnings.append(f"{skipped} C/D damage(s) fell outside the schematic depth "
                         f"range and were not counted.")
+
+    # Enrich each kept damage with its severity word and THICKNESS channel (the
+    # dominant channel for that pipe's OD across its interval). Read-only.
+    role_od = {p["role"]: (p["sizes"][0] if p.get("sizes") else None) for p in pipes}
+    sections = _thickness_sections(excel_path)
+    for d in reps:
+        d["severity"] = _GRADE_WORD[d["grade"]]
+        d["channel"] = _resolve_channel(sections, role_od.get(d["role"]),
+                                        intervals, d["interval"])
 
     # Cluster within each interval by the depth window (anchored to cluster start).
     pictures = []

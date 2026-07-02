@@ -631,6 +631,18 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             text_fields[tag] = sizes_list_string(pipe_model, code)
             text_fields_quiet.add(tag)
 
+    # Damage-section overlays: the picture clusters (worst C/D per pipe per
+    # interval), enriched with severity + THICKNESS channel. Needs the XML.
+    damage_clusters = None
+    if pipe_model is not None and req.xml_path and os.path.isfile(req.xml_path):
+        try:
+            from well_tools.report.damage_select import compute_damage_pictures
+            damage_clusters = compute_damage_pictures(
+                req.xml_path, req.excel_path, pipe_model)["pictures"]
+        except Exception as e:  # noqa: BLE001 — overlays are best-effort
+            logger.exception("Damage-cluster computation failed")
+            review_notes.append(f"⚠ Damage overlays skipped — {e}")
+
     # Fold in the Interval Generator: build the Raw Data table from the XML into a
     # SEPARATE workbook beside the report — the data Excel is never opened for
     # writing, so its macro-computed grades/bars stay intact. Non-fatal.
@@ -667,6 +679,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             pipe_model=pipe_model,
             text_fields_quiet=text_fields_quiet,
             wellhead_damage=req.wellhead_damage,
+            damage_clusters=damage_clusters,
             progress=on_progress,
             review=on_review,
         )

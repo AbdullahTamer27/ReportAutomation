@@ -44,8 +44,11 @@ _W_R = qn("w:r")
 _W_PPR = qn("w:pPr")
 _W_TXBX = qn("w:txbxContent")
 
-# Shoe/hanger overlay tags that are removed when not filled (never the wellhead).
-_REMOVABLE = re.compile(r"\{\{ovl_(?:shoe|hanger)_\w+\}\}")
+# Variable overlay tags removed when not filled (never the fixed wellhead):
+# shoe/hanger callouts, and the per-damage-point metal-loss / channel slots.
+_REMOVABLE = re.compile(
+    r"\{\{ovl_(?:shoe_\w+|hanger_\w+|ml\d+_\d+|ch\d+_\d+)\}\}"
+)
 
 
 # --- Local helpers (intentionally not shared) --------------------------------
@@ -195,19 +198,44 @@ def _remove_unfilled_boxes(doc):
     return removed
 
 
+def _damage_mapping(clusters):
+    """{tag: text} for the per-damage-point metal-loss and channel overlays.
+
+    Block i (1-based, depth-sorted), point k (1-based within the block):
+        {{ovl_ml<i>_<k>}} -> "<severity> metal loss in <suffix> Max WL% is
+                              <loss>% at <depth>ft"
+        {{ovl_ch<i>_<k>}} -> "Channel <n> is used to calculate <the ml text>."
+    The channel overlay is emitted only when a channel was resolved."""
+    mapping = {}
+    for i, cluster in enumerate(clusters, start=1):
+        for k, p in enumerate(cluster, start=1):
+            suffix = (p.get("suffix") or "").replace('"', _INCH)
+            ml = (f"{p.get('severity', '')} metal loss in {suffix} "
+                  f"Max WL% is {float(p['loss']):.1f}% at {float(p['depth']):.1f}ft")
+            mapping[f"{{{{ovl_ml{i}_{k}}}}}"] = ml
+            ch = p.get("channel")
+            if ch:
+                mapping[f"{{{{ovl_ch{i}_{k}}}}}"] = (
+                    f"Channel {ch} is used to calculate {ml}."
+                )
+    return mapping
+
+
 # --- Public entry point ------------------------------------------------------
 def apply_overlays(path, wellhead_damage=None, pipe_model=None, excel_path=None,
-                   progress=None, review=None):
+                   damage_clusters=None, progress=None, review=None):
     """Fill overlay text boxes in the document at `path` (edited in place).
 
     `wellhead_damage`: True -> damage statement, False -> clean, None -> skip.
-    `pipe_model` + `excel_path`: enable the shoe/hanger callouts and the removal
-    of unused shoe/hanger boxes. Returns the number of boxes filled.
+    `pipe_model` + `excel_path`: enable the shoe/hanger callouts.
+    `damage_clusters`: the damage-picture clusters — enables the per-point
+    metal-loss / channel callouts inside each damage block.
+    Unfilled variable slots (shoe/hanger/ml/ch) are removed. Returns boxes filled.
     """
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
-    if wellhead_damage is None and not pipe_model:
+    if wellhead_damage is None and not pipe_model and not damage_clusters:
         return 0
 
     mapping = {}
@@ -215,10 +243,12 @@ def apply_overlays(path, wellhead_damage=None, pipe_model=None, excel_path=None,
         mapping[WELLHEAD_TAG] = WELLHEAD_DAMAGE if wellhead_damage else WELLHEAD_CLEAN
     if pipe_model:
         mapping.update(_shoe_hanger_mapping(pipe_model, excel_path))
+    if damage_clusters:
+        mapping.update(_damage_mapping(damage_clusters))
 
     doc = Document(path)
     filled = _replace_in_textboxes(doc, mapping)
-    removed = _remove_unfilled_boxes(doc) if pipe_model else 0
+    removed = _remove_unfilled_boxes(doc) if (pipe_model or damage_clusters) else 0
     if filled or removed:
         doc.save(path)
 
