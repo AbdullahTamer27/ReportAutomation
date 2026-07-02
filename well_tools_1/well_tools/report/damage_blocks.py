@@ -28,6 +28,7 @@ INDEX_SENTINEL = "@N"
 _DMG_TAG_RE = re.compile(r"\{\{DMG\d+_\d+\}\}")
 
 _W_P = qn("w:p")
+_W_R = qn("w:r")
 _W_T = qn("w:t")
 _WP_DOCPR = qn("wp:docPr")
 _PIC_CNVPR = qn("pic:cNvPr")
@@ -56,9 +57,15 @@ def _has_damage_placeholders(doc):
 def _subst_index_in_element(el, i):
     """Replace @N -> i in `el`: in paragraph text (runs collapsed so a split
     token is still replaced) AND in any placeholder picture's Alt Text
-    (wp:docPr name/descr/title), so {{DMG@N_1}} becomes {{DMG1_1}}, etc."""
+    (wp:docPr name/descr/title), so {{DMG@N_1}} becomes {{DMG1_1}}, etc.
+
+    Each paragraph is handled by its OWN direct run text (``w:r/w:t``) only —
+    never ``.//w:t`` — so a paragraph that anchors a text box does not reach
+    down into the box and collapse its runs. Text-box paragraphs live in
+    ``w:txbxContent`` and are visited on their own by ``el.iter(_W_P)``, so their
+    ``{{ovl_...@N_...}}`` tags are still substituted, but in place."""
     for p in el.iter(_W_P):
-        ts = p.findall(".//" + _W_T)
+        ts = p.findall(_W_R + "/" + _W_T)
         if not ts:
             continue
         joined = "".join(t.text or "" for t in ts)
