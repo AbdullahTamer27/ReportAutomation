@@ -680,6 +680,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             text_fields_quiet=text_fields_quiet,
             wellhead_damage=req.wellhead_damage,
             damage_clusters=damage_clusters,
+            single_doc_io=True,   # open the Word file once, save once (verified identical)
             progress=on_progress,
             review=on_review,
         )
