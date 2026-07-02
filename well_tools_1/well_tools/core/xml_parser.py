@@ -1,5 +1,6 @@
 """WellSchematic XML parsing, pipe-string classification, and pipe summary."""
 
+import os
 import xml.etree.ElementTree as ET
 import pandas as pd
 
@@ -7,6 +8,12 @@ from .formatting import decimal_to_pipe_fraction, format_weight
 
 TUBING_PIPESETS = {1}
 LINER_TOP_THRESHOLD = 1.0  # ft
+
+# One report generation parses the same schematic several times (intervals,
+# config, deepest point, raw data). Cache the parsed result per file, keyed by
+# path+mtime+size, and hand each caller its OWN copy — so callers that sort or
+# mutate the frame behave exactly as before, minus the repeated disk parse.
+_XML_CACHE = {}
 
 
 def classify_pipe_strings(pipes):
@@ -32,6 +39,19 @@ def classify_pipe_strings(pipes):
 
 
 def parse_wellschematic_xml(xml_path):
+    st = os.stat(xml_path)
+    key = os.path.abspath(xml_path)
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _XML_CACHE.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1].copy()
+
+    df = _parse_wellschematic_xml_uncached(xml_path)
+    _XML_CACHE[key] = (stamp, df)
+    return df.copy()
+
+
+def _parse_wellschematic_xml_uncached(xml_path):
     tree = ET.parse(xml_path)
     root = tree.getroot()
 

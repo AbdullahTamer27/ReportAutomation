@@ -55,7 +55,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                             include_disclaimer=False, company_logo_path=None,
                             company_name=None, text_fields=None,
                             conditional_lines=None, pipe_model=None,
-                            text_fields_quiet=None):
+                            text_fields_quiet=None, wellhead_damage=None,
+                            damage_clusters=None, single_doc_io=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -85,6 +86,20 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(working_dir, f"Automation_Report_{stamp}.docx")
 
+    # Single-doc I/O: open the template once, thread one live document through
+    # every pass, and save once at the end — instead of each pass re-opening and
+    # re-zipping the file (~9 parse+write cycles). Off by default; the value can
+    # come from the WELLTOOLS_SINGLE_DOC_IO env var. Each pass takes an optional
+    # `doc=`: when given it works on the shared document and does not save, so the
+    # output is identical, just written once. Verified via tools/golden_report.py.
+    if single_doc_io is None:
+        single_doc_io = os.environ.get("WELLTOOLS_SINGLE_DOC_IO", "0") == "1"
+    shared = None
+    if single_doc_io:
+        from docx import Document
+        log("Single-doc I/O: opening template once…")
+        shared = Document(word_template_path)
+
     # ---- 0) Universal master template: keep present pipe sections, drop the rest ----
     if pipe_model is not None:
         from .pipe_config import ROLE_NAMES
@@ -93,7 +108,7 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         from . import pipe_sections
         pipe_sections.apply_pipe_sections(
             word_template_path, output_path, present_roles, ROLE_NAMES,
-            progress=log, review=review,
+            progress=log, review=review, doc=shared,
         )
         tables_src = output_path   # subsequent passes operate on the prepared output
     else:
@@ -105,26 +120,27 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     tables.fill_report_tables(
         tables_src, excel_data_path, output_path,
         highest_top_n=highest_top_n, pipe_model=pipe_model,
-        progress=log, review=review,
+        progress=log, review=review, doc=shared,
     )
 
     # ---- 1.5) Expand damage blocks (N image-sections) on the output ----
     log(f"Expanding damage sections (N={damage_count})…")
     from . import damage_blocks
-    damage_blocks.expand_in_file(output_path, damage_count, progress=log, review=review)
+    damage_blocks.expand_in_file(output_path, damage_count, progress=log,
+                                 review=review, doc=shared)
 
     # ---- 1.6) Disclaimer: keep or remove the {{DISC}} table ----
     log(f"Applying disclaimer choice (include={bool(include_disclaimer)})…")
     from . import disclaimer
     disclaimer.apply_in_file(output_path, bool(include_disclaimer),
-                             progress=log, review=review)
+                             progress=log, review=review, doc=shared)
 
     # ---- 2) Images: output -> output (in place) ----
     img_folder = resolve_image_folder(working_dir)
     log(f"Placing images from: {img_folder}")
     from . import images
     images.place_report_images(output_path, img_folder, output_path,
-                               progress=log, review=review)
+                               progress=log, review=review, doc=shared)
 
     # ---- 2.5) Company logo: body {{COMP}} table + tagged header pictures ----
     if company_logo_path:
@@ -132,28 +148,41 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
         from . import company
         company.place_company_logo(output_path, company_logo_path,
                                    company_name=company_name,
-                                   progress=log, review=review)
+                                   progress=log, review=review, doc=shared)
 
     # ---- 2.6) Well-metadata text tags ({{well_name}}, {{log_date}}, …) ----
     if text_fields:
         log("Filling well-metadata text tags…")
         from . import text_fields as tf
         tf.apply_text_fields(output_path, text_fields, progress=log, review=review,
-                             quiet_tags=text_fields_quiet)
+                             quiet_tags=text_fields_quiet, doc=shared)
 
     # ---- 2.7) Company-conditional lines ({{weatherford_corr}}, …) ----
     if conditional_lines:
         log("Applying company-conditional lines…")
         from . import conditional
         conditional.apply_conditional_lines(output_path, conditional_lines,
-                                            progress=log, review=review)
+                                            progress=log, review=review, doc=shared)
 
     # ---- 2.8) Per-pipe metal-loss pie charts ({{pie_<role>}}) ----
     if pipe_model is not None:
         log("Rendering per-pipe pie charts…")
         from . import charts
         charts.place_pie_charts(output_path, pipe_model, excel_data_path,
-                                progress=log, review=review)
+                                progress=log, review=review, doc=shared)
+
+    # ---- 2.9) Floating overlays ({{ovl_*}}) — self-contained pass ----
+    if wellhead_damage is not None or pipe_model is not None or damage_clusters:
+        log("Filling overlay text boxes…")
+        from . import overlays
+        overlays.apply_overlays(output_path, wellhead_damage=wellhead_damage,
+                                pipe_model=pipe_model, excel_path=excel_data_path,
+                                damage_clusters=damage_clusters,
+                                progress=log, review=review, doc=shared)
+
+    # Single-doc I/O: the one and only save.
+    if shared is not None:
+        shared.save(output_path)
 
     log(f"Done → {output_path}")
     return output_path

@@ -6,7 +6,6 @@ const $ = (id) => document.getElementById(id);
 const els = {
   // mode
   modeReport: $("modeReport"),
-  modeInterval: $("modeInterval"),
   modeGhost: $("modeGhost"),
   // ghost merger
   ghostLength: $("ghostLength"),
@@ -33,19 +32,15 @@ const els = {
   cmRegister: $("cmRegister"),
   cmStatus: $("cmStatus"),
   cmList: $("cmList"),
-  // interval generator
-  pickXml: $("pickXml"),
-  xmlPath: $("xmlPath"),
-  pickTemplate: $("pickTemplate"),
-  templatePath: $("templatePath"),
-  intervalGenerate: $("intervalGenerate"),
-  intervalStatus: $("intervalStatus"),
-  intervalPreview: $("intervalPreview"),
   // inputs
   pickExcel: $("pickExcel"),
   excelPath: $("excelPath"),
   workingDirInput: $("workingDirInput"),
   browseFolder: $("browseFolder"),
+  pickXmlReport: $("pickXmlReport"),
+  xmlReportPath: $("xmlReportPath"),
+  damageAutoHint: $("damageAutoHint"),
+  damageCountHint: $("damageCountHint"),
   templateSelect: $("templateSelect"),
   templatePickHint: $("templatePickHint"),
   toWorkspace: $("toWorkspace"),
@@ -66,6 +61,7 @@ const els = {
   company: $("companySelect"),
   damageCount: $("damageCount"),
   includeDisclaimer: $("includeDisclaimer"),
+  wellheadDamage: $("wellheadDamage"),
   templateHint: $("templateHint"),
   companyHint: $("companyHint"),
   generate: $("generate"),
@@ -82,10 +78,10 @@ const state = {
   companies: [],
   companiesLoaded: false,
   excelPath: null,
+  xmlPath: null,     // optional WellSchematic XML → autonomous damage count
   configOk: false,   // config parsed AND every configured pipe has its Excel sheet
 };
 
-const ivState = { xmlPath: null, templatePath: null };
 const ghostState = { csvPath: null };
 const tmState = { filePath: null };
 const cmState = { filePath: null };
@@ -96,7 +92,7 @@ function pyapi() {
 }
 
 // --- View navigation --------------------------------------------------------
-const VIEWS = ["mode", "interval", "ghost", "inputs", "workspace", "templates", "companies"];
+const VIEWS = ["mode", "ghost", "inputs", "workspace", "templates", "companies"];
 function showView(name) {
   for (const v of VIEWS) {
     const el = document.getElementById(`view-${v}`);
@@ -157,13 +153,15 @@ function resolveCompany() {
 }
 
 function refreshCompanyHint() {
-  if (!state.companies.length) {
-    els.companyHint.textContent =
-      "No companies registered — add one in the Company Manager before generating.";
-    els.companyHint.classList.add("hint-warn");
-  } else {
-    els.companyHint.textContent = "";
-    els.companyHint.classList.remove("hint-warn");
+  if (els.companyHint) {
+    if (!state.companies.length) {
+      els.companyHint.textContent =
+        "No companies registered — add one in the Company Manager before generating.";
+      els.companyHint.classList.add("hint-warn");
+    } else {
+      els.companyHint.textContent = "";
+      els.companyHint.classList.remove("hint-warn");
+    }
   }
   updateGenerateEnabled();
 }
@@ -185,8 +183,10 @@ function resolveTemplate() {
 
 function refreshTemplateHint() {
   const t = resolveTemplate();
-  els.templateHint.textContent = t ? `Template: ${t.name}` : "";
-  els.templateHint.classList.remove("hint-warn");
+  if (els.templateHint) {
+    els.templateHint.textContent = t ? `Template: ${t.name}` : "";
+    els.templateHint.classList.remove("hint-warn");
+  }
   updateGenerateEnabled();
 }
 
@@ -212,7 +212,7 @@ async function previewConfig() {
     const res = await fetch("/api/config/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ config: cfg, excel_path: state.excelPath }),
+      body: JSON.stringify({ config: cfg, excel_path: state.excelPath, xml_path: state.xmlPath }),
     });
     const data = await res.json().catch(() => ({}));
     els.configPreview.hidden = false;
@@ -263,6 +263,18 @@ function renderConfigPreview(data) {
     `<div class="cfg-title">${data.pipes.length} pipe${data.pipes.length === 1 ? "" : "s"}</div>
      <ul class="cfg-list">${items}${warns}</ul>${blocked}`;
   updateGenerateEnabled();
+  if (state.configOk) computeDamageCount();   // refresh the auto damage count
+  // Auto-fill Bottom depth from the XML's deepest point (until the user edits it).
+  if (data.bottom_depth && els.btmDepth &&
+      (!els.btmDepth.value || els.btmDepth.classList.contains("prefilled"))) {
+    els.btmDepth.value = data.bottom_depth;
+    els.btmDepth.classList.add("prefilled");
+  }
+}
+
+// Once the user edits Bottom depth themselves, stop auto-filling it.
+if (els.btmDepth) {
+  els.btmDepth.addEventListener("input", () => els.btmDepth.classList.remove("prefilled"));
 }
 
 function damageCountValue() {
@@ -288,6 +300,81 @@ async function browseFolder() {
   const path = await api.pick_folder();
   if (path) els.workingDirInput.value = path;
 }
+
+// --- WellSchematic XML → autonomous damage count ----------------------------
+async function pickXmlReport() {
+  const api = pyapi();
+  if (!api) return inputsError("Native file dialogs are only available in the desktop app.");
+  const path = await api.pick_file(["WellSchematic XML (*.xml)", "All files (*.*)"]);
+  if (!path) return;
+  state.xmlPath = path;
+  if (els.xmlReportPath) {
+    els.xmlReportPath.textContent = path;
+    els.xmlReportPath.classList.remove("muted");
+  }
+  await deriveConfigFromXml();   // pre-fill Configuration, then preview it
+}
+
+// Derive the configuration string from the XML and drop it into the field.
+async function deriveConfigFromXml() {
+  if (!state.xmlPath || !els.configInput) return computeDamageCount();
+  try {
+    const res = await fetch("/api/config/from-xml", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml_path: state.xmlPath }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.config) {
+      els.configInput.value = data.config;
+      els.configInput.classList.add("prefilled");
+      if (els.damageAutoHint) {
+        els.damageAutoHint.textContent = `Configuration set from the schematic: ${data.config} — review it.`;
+        els.damageAutoHint.classList.remove("hint-warn");
+      }
+      scheduleConfigPreview();   // validates + auto damage count + bottom depth
+    } else {
+      computeDamageCount();      // couldn't derive — use whatever config is there
+    }
+  } catch (err) {
+    computeDamageCount();
+  }
+}
+
+async function computeDamageCount() {
+  // Needs the XML, the Excel, and a validated config (pipe sheets resolve).
+  if (!state.xmlPath || !state.excelPath || !configValue() || !state.configOk) return;
+  els.damageCountHint.textContent = "Computing damage count…";
+  els.damageCountHint.classList.remove("hint-warn");
+  try {
+    const res = await fetch("/api/damage/count", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml_path: state.xmlPath, excel_path: state.excelPath, config: configValue() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      els.damageCountHint.textContent = data.detail || `Couldn't compute (HTTP ${res.status})`;
+      els.damageCountHint.classList.add("hint-warn");
+      return;
+    }
+    els.damageCount.value = String(data.count);
+    els.damageCount.classList.add("prefilled");
+    const warn = (data.warnings && data.warnings.length) ? "  ⚠ " + data.warnings.join("  ") : "";
+    els.damageCountHint.textContent =
+      `Auto-set to ${data.count} from the schematic — worst Class C/D per pipe per interval. Override if needed.${warn}`;
+    els.damageCountHint.classList.toggle("hint-warn", !!warn);
+  } catch (err) {
+    els.damageCountHint.textContent = err.message || String(err);
+    els.damageCountHint.classList.add("hint-warn");
+  }
+}
+
+// Clear the auto-fill highlight/hint once the user edits the count themselves.
+els.damageCount.addEventListener("input", () => {
+  els.damageCount.classList.remove("prefilled");
+  els.damageCountHint.textContent = "";
+});
 
 // --- Load optional fields from a well-schematic PDF -------------------------
 const SCHEMATIC_FIELDS = {        // response key -> input element
@@ -407,6 +494,8 @@ async function generate() {
         well_type: els.wellType.value.trim() || null,
         btm_depth: els.btmDepth.value.trim() || null,
         field: els.fieldName.value.trim() || null,
+        wellhead_damage: els.wellheadDamage.checked,
+        xml_path: state.xmlPath || null,
         config: configValue() || null,
       }),
     });
@@ -749,91 +838,6 @@ function cmShowStatus(kind, msg) {
   els.cmStatus.innerHTML = escapeHtml(msg);
 }
 
-// --- Interval Generator -----------------------------------------------------
-async function pickXml() {
-  const api = pyapi();
-  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
-  const p = await api.pick_file(["XML files (*.xml)", "All files (*.*)"]);
-  if (p) {
-    ivState.xmlPath = p;
-    els.xmlPath.textContent = p;
-    els.xmlPath.classList.remove("muted");
-  }
-}
-
-async function pickTemplate() {
-  const api = pyapi();
-  if (!api) return intervalError("Native file dialogs are only available in the desktop app.");
-  const p = await api.pick_file(["Excel files (*.xlsx;*.xlsm)", "All files (*.*)"]);
-  if (p) {
-    ivState.templatePath = p;
-    els.templatePath.textContent = p;
-    els.templatePath.classList.remove("muted");
-  }
-}
-
-async function intervalGenerate() {
-  if (!ivState.xmlPath) return intervalError("Please choose a WellSchematic XML file.");
-  if (!ivState.templatePath) return intervalError("Please choose an Excel template.");
-
-  setIntervalLoading(true);
-  intervalStatus("info", `<span class="spinner"></span> Generating Raw Data…`);
-  els.intervalPreview.hidden = true;
-
-  try {
-    const res = await fetch("/api/interval/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        xml_path: ivState.xmlPath,
-        template_path: ivState.templatePath,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      intervalError(data && data.detail ? data.detail : `HTTP ${res.status}`);
-      return;
-    }
-    intervalSuccess(data);
-  } catch (err) {
-    intervalError(`Request failed: ${err.message || err}`);
-  } finally {
-    setIntervalLoading(false);
-  }
-}
-
-function intervalSuccess(data) {
-  const types = Object.entries(data.pipe_types)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(", ");
-  intervalStatus(
-    "success",
-    `<strong>Raw Data updated in place</strong>
-     <div class="result-path">${escapeHtml(data.template_path)}</div>
-     <div class="iv-summary">${data.num_pipes} pipes (${escapeHtml(types)}) • ${data.num_intervals} intervals • ${data.depth_min.toFixed(0)}–${data.depth_max.toFixed(0)} ft<br>${escapeHtml(data.thickness_note)}</div>
-     <button id="ivRevealBtn" type="button" class="secondary">Reveal in file manager</button>`
-  );
-  const btn = $("ivRevealBtn");
-  if (btn) btn.addEventListener("click", () => reveal(data.template_path));
-  els.intervalPreview.hidden = false;
-  els.intervalPreview.textContent = data.preview;
-}
-
-function intervalStatus(kind, html) {
-  els.intervalStatus.hidden = false;
-  els.intervalStatus.className = `status ${kind}`;
-  els.intervalStatus.innerHTML = html;
-}
-function intervalError(msg) {
-  intervalStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
-}
-function setIntervalLoading(loading) {
-  els.intervalGenerate.disabled = loading;
-  els.pickXml.disabled = loading;
-  els.pickTemplate.disabled = loading;
-  els.intervalGenerate.textContent = loading ? "Working…" : "Generate Raw Data";
-}
-
 // --- Ghost Merger -----------------------------------------------------------
 async function pickGhostCsv() {
   const api = pyapi();
@@ -916,7 +920,6 @@ els.modeReport.addEventListener("click", () => {
   showView("inputs");
   ensureTemplates().catch((err) => inputsError(err.message || String(err)));
 });
-els.modeInterval.addEventListener("click", () => showView("interval"));
 els.modeGhost.addEventListener("click", () => showView("ghost"));
 els.openTemplates.addEventListener("click", () => showView("templates"));
 els.openCompanies.addEventListener("click", () => showView("companies"));
@@ -930,20 +933,18 @@ document.querySelectorAll("[data-nav]").forEach((b) =>
   b.addEventListener("click", () => showView(b.getAttribute("data-nav")))
 );
 
-els.pickXml.addEventListener("click", pickXml);
-els.pickTemplate.addEventListener("click", pickTemplate);
-els.intervalGenerate.addEventListener("click", intervalGenerate);
-
 els.pickGhostCsv.addEventListener("click", pickGhostCsv);
 els.ghostMerge.addEventListener("click", ghostMerge);
 
 els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
+els.pickXmlReport.addEventListener("click", pickXmlReport);
 els.loadSchematic.addEventListener("click", pickSchematic);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
 els.templateSelect.addEventListener("change", refreshTemplateHint);
 els.configInput.addEventListener("input", scheduleConfigPreview);
+els.configInput.addEventListener("input", () => els.configInput.classList.remove("prefilled"));
 els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 

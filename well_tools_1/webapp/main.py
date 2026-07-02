@@ -50,10 +50,12 @@ from .registry import (  # noqa: E402
 )
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
-from .interval import generate_raw_data, IntervalInputError  # noqa: E402
+from .interval import generate_raw_data, generate_raw_data_file, IntervalInputError  # noqa: E402
 from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 
-from well_tools.report.pipe_config import build_pipe_model, ConfigParseError  # noqa: E402
+from well_tools.report.pipe_config import (  # noqa: E402
+    build_pipe_model, ConfigParseError, deepest_point_from_xml, format_depth,
+)
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -90,6 +92,8 @@ class GenerateRequest(BaseModel):
     well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
     field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
+    wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
+    xml_path: str | None = Field(None, description="WellSchematic XML; when given, the Raw Data sheet is (re)written into the data Excel")
 
 
 class GenerateResponse(BaseModel):
@@ -146,6 +150,7 @@ class CompanyRegisterResponse(BaseModel):
 class ConfigPreviewRequest(BaseModel):
     config: str = Field(..., description="Configuration string, e.g. 4.5x3.5TBG-7LNR-9.625")
     excel_path: str | None = Field(None, description="Optional workbook to read shoe depth / joint counts")
+    xml_path: str | None = Field(None, description="Optional WellSchematic XML; overrides shoe depths with exact values")
 
 
 class PipeOut(BaseModel):
@@ -166,6 +171,28 @@ class PipeOut(BaseModel):
 
 class ConfigPreviewResponse(BaseModel):
     pipes: list[PipeOut]
+    warnings: list[str]
+    bottom_depth: str | None = None   # well's deepest point from the XML (for {{btm_depth}})
+
+
+class ConfigFromXmlRequest(BaseModel):
+    xml_path: str = Field(..., description="Absolute path to the WellSchematic XML")
+
+
+class ConfigFromXmlResponse(BaseModel):
+    config: str
+    pipes: int
+
+
+class DamageCountRequest(BaseModel):
+    xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml (for intervals)")
+    excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
+    config: str = Field(..., description="Configuration string (to resolve pipe sheets)")
+
+
+class DamageCountResponse(BaseModel):
+    count: int
+    manifest: list[str]
     warnings: list[str]
 
 
@@ -281,13 +308,67 @@ def config_preview(req: ConfigPreviewRequest):
     given, each pipe's shoe depth + joint count) so the UI can show the mapping
     before generating. Read-only."""
     try:
-        result = build_pipe_model(req.config, req.excel_path)
+        result = build_pipe_model(req.config, req.excel_path, xml_path=req.xml_path)
     except ConfigParseError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:  # noqa: BLE001
         logger.exception("Config preview failed")
         raise HTTPException(status_code=500, detail=f"Config preview failed: {e}")
-    return ConfigPreviewResponse(**result)
+
+    # Well bottom depth = the XML's deepest point (for the {{btm_depth}} field).
+    bottom_depth = None
+    if req.xml_path and os.path.isfile(req.xml_path):
+        try:
+            d = deepest_point_from_xml(req.xml_path)
+            if d is not None:
+                bottom_depth = f"{format_depth(d)} ft"
+        except Exception:  # noqa: BLE001
+            logger.exception("Deepest-point read failed")
+    return ConfigPreviewResponse(pipes=result["pipes"], warnings=result["warnings"],
+                                 bottom_depth=bottom_depth)
+
+
+@app.post("/api/config/from-xml", response_model=ConfigFromXmlResponse)
+def config_from_xml(req: ConfigFromXmlRequest):
+    """Derive a configuration string from a WellSchematic XML (inner→outer order),
+    to pre-fill the Configuration field for the user to review. Read-only."""
+    if not req.xml_path or not os.path.isfile(req.xml_path):
+        raise HTTPException(status_code=400, detail="WellSchematic XML not found at that path.")
+    if not req.xml_path.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Please choose a .xml schematic file.")
+    try:
+        from well_tools.report.pipe_config import pipes_from_xml, config_string_from_pipes
+        pipes = pipes_from_xml(req.xml_path)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Config-from-XML failed")
+        raise HTTPException(status_code=500, detail=f"Could not derive the configuration: {e}")
+    return ConfigFromXmlResponse(config=config_string_from_pipes(pipes), pipes=len(pipes))
+
+
+@app.post("/api/damage/count", response_model=DamageCountResponse)
+def damage_count(req: DamageCountRequest):
+    """Autonomous damage count: worst Class C/D damage per (interval, pipe),
+    clustered within 200 ft into 'damage pictures'. Returns the picture count
+    (which pre-fills the manual field) and a per-picture manifest. Read-only."""
+    if not req.xml_path or not os.path.isfile(req.xml_path):
+        raise HTTPException(status_code=400, detail="WellSchematic XML not found at that path.")
+    if not req.xml_path.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Please choose a .xml schematic file.")
+    if not req.excel_path or not os.path.isfile(req.excel_path):
+        raise HTTPException(status_code=400, detail="Excel data file not found.")
+    try:
+        pm = build_pipe_model(req.config, req.excel_path)
+    except ConfigParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        from well_tools.report.damage_select import compute_damage_pictures, manifest_lines
+        res = compute_damage_pictures(req.xml_path, req.excel_path, pm["pipes"])
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Damage count failed")
+        raise HTTPException(status_code=500, detail=f"Could not compute the damage count: {e}")
+    return DamageCountResponse(count=res["count"],
+                               manifest=manifest_lines(res["pictures"]),
+                               warnings=res["warnings"])
 
 
 @app.post("/api/schematic/parse", response_model=SchematicResponse)
@@ -533,7 +614,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     if req.config and req.config.strip():
         from well_tools.report.pipe_config import sizes_list_string  # noqa: E402
         try:
-            pm = build_pipe_model(req.config, req.excel_path, review=on_review)
+            pm = build_pipe_model(req.config, req.excel_path, review=on_review,
+                                  xml_path=req.xml_path)
         except ConfigParseError as e:
             raise HTTPException(status_code=400, detail=f"Configuration: {e}")
         pipe_model = pm["pipes"]
@@ -549,6 +631,39 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             text_fields[tag] = sizes_list_string(pipe_model, code)
             text_fields_quiet.add(tag)
 
+    # Damage-section overlays: the picture clusters (worst C/D per pipe per
+    # interval), enriched with severity + THICKNESS channel. Needs the XML.
+    damage_clusters = None
+    if pipe_model is not None and req.xml_path and os.path.isfile(req.xml_path):
+        try:
+            from well_tools.report.damage_select import compute_damage_pictures
+            damage_clusters = compute_damage_pictures(
+                req.xml_path, req.excel_path, pipe_model)["pictures"]
+        except Exception as e:  # noqa: BLE001 — overlays are best-effort
+            logger.exception("Damage-cluster computation failed")
+            review_notes.append(f"⚠ Damage overlays skipped — {e}")
+
+    # Fold in the Interval Generator: build the Raw Data table from the XML into a
+    # SEPARATE workbook beside the report — the data Excel is never opened for
+    # writing, so its macro-computed grades/bars stay intact. Non-fatal.
+    if req.xml_path:
+        stem = _safe_filename(req.well_name) if req.well_name else "well"
+        rawdata_path = os.path.join(req.working_dir, f"{stem}_RawData.xlsx")
+        try:
+            rd = generate_raw_data_file(req.xml_path, rawdata_path, data_excel=req.excel_path)
+            note = f"Raw Data written to {os.path.basename(rawdata_path)}"
+            note += " (with 'intervals MAIN')." if rd.get("intervals_main") \
+                else " — note: no 'intervals MAIN' sheet found in the data Excel."
+            review_notes.append(note)
+        except PermissionError:
+            review_notes.append(f"⚠ Raw Data not written — {os.path.basename(rawdata_path)} "
+                                "is open. Close it and regenerate.")
+        except IntervalInputError as e:
+            review_notes.append(f"⚠ Raw Data not written — {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Raw Data write failed")
+            review_notes.append(f"⚠ Raw Data not written — {e}")
+
     try:
         output_path = build_automation_report(
             word_template_path=template.file_path,
@@ -563,6 +678,9 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             conditional_lines=conditional_lines,
             pipe_model=pipe_model,
             text_fields_quiet=text_fields_quiet,
+            wellhead_damage=req.wellhead_damage,
+            damage_clusters=damage_clusters,
+            single_doc_io=True,   # open the Word file once, save once (verified identical)
             progress=on_progress,
             review=on_review,
         )

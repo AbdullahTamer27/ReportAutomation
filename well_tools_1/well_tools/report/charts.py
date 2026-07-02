@@ -233,22 +233,25 @@ def render_pie(pipe, counts, out_path):
 
 
 # ---------------- orchestration ----------------
-def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=None):
+def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=None,
+                     doc=None):
     """Render a pie for every present pipe, drop each into its ``{{pie_<role>}}``
-    alt-text placeholder in `output_path`, then delete any ``{{pie_*}}``
-    placeholder that wasn't filled (a pipe that doesn't exist).
+    alt-text placeholder, then delete any ``{{pie_*}}`` placeholder that wasn't
+    filled (a pipe that doesn't exist).
 
     Omission keys off each placeholder's own Alt Text, so the template needs no
     ``{{<role>_start}}…{{<role>_end}}`` markers around the charts — which aren't
-    practical when the pies are arranged side-by-side. Returns the count placed."""
+    practical when the pies are arranged side-by-side. Returns the count placed.
+    When `doc` is given, operate on it and do not save (caller owns the single
+    open/save); otherwise open and save `output_path`."""
     log = progress or print
     rev = review or (lambda m: None)
 
-    import openpyxl
     from docx import Document
+    from . import _wbcache
     from .images import place_images_by_alttext, remove_unfilled_alttext_placeholders
 
-    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    wb = _wbcache.load(excel_path, data_only=True)
     sheets = set(wb.sheetnames)
 
     tmp = tempfile.mkdtemp(prefix="welltools_pies_")
@@ -264,7 +267,9 @@ def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=
             log(f"Rendered pie for {p['suffix']} "
                 f"(A={counts['A']} B={counts['B']} C={counts['C']} D={counts['D']})")
 
-        doc = Document(output_path)
+        own = doc is None
+        if own:
+            doc = Document(output_path)
         placed, skipped = 0, 0
         if tag_to_file:
             # restrict_to_dict: only touch {{pie_*}} placeholders. Without this,
@@ -275,7 +280,7 @@ def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=
         # Sweep out every pie placeholder we didn't fill — the absent pipes.
         removed = remove_unfilled_alttext_placeholders(
             doc, set(tag_to_file), _PIE_PLACEHOLDER, progress=log)
-        if placed or removed:
+        if own and (placed or removed):
             doc.save(output_path)
         rev(f"Pie charts — placed {placed}"
             + (f", {removed} un-inserted removed" if removed else "")

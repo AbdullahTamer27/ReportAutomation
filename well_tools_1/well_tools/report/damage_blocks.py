@@ -28,6 +28,7 @@ INDEX_SENTINEL = "@N"
 _DMG_TAG_RE = re.compile(r"\{\{DMG\d+_\d+\}\}")
 
 _W_P = qn("w:p")
+_W_R = qn("w:r")
 _W_T = qn("w:t")
 _WP_DOCPR = qn("wp:docPr")
 _PIC_CNVPR = qn("pic:cNvPr")
@@ -56,9 +57,15 @@ def _has_damage_placeholders(doc):
 def _subst_index_in_element(el, i):
     """Replace @N -> i in `el`: in paragraph text (runs collapsed so a split
     token is still replaced) AND in any placeholder picture's Alt Text
-    (wp:docPr name/descr/title), so {{DMG@N_1}} becomes {{DMG1_1}}, etc."""
+    (wp:docPr name/descr/title), so {{DMG@N_1}} becomes {{DMG1_1}}, etc.
+
+    Each paragraph is handled by its OWN direct run text (``w:r/w:t``) only —
+    never ``.//w:t`` — so a paragraph that anchors a text box does not reach
+    down into the box and collapse its runs. Text-box paragraphs live in
+    ``w:txbxContent`` and are visited on their own by ``el.iter(_W_P)``, so their
+    ``{{ovl_...@N_...}}`` tags are still substituted, but in place."""
     for p in el.iter(_W_P):
-        ts = p.findall(".//" + _W_T)
+        ts = p.findall(_W_R + "/" + _W_T)
         if not ts:
             continue
         joined = "".join(t.text or "" for t in ts)
@@ -146,14 +153,19 @@ def expand_damage_blocks(doc, damage_count):
     return True
 
 
-def expand_in_file(path, damage_count, progress=None, review=None):
-    """Open `path`, expand the damage block `damage_count` times, save in place."""
+def expand_in_file(path, damage_count, progress=None, review=None, doc=None):
+    """Expand the damage block `damage_count` times. When `doc` is given, operate
+    on it and do not save (caller owns the single open/save); otherwise open and
+    save `path` as before."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     found = expand_damage_blocks(doc, damage_count)
-    doc.save(path)
+    if own:
+        doc.save(path)
 
     if found:
         log(f"Damage sections: block expanded x{int(damage_count)}.")
