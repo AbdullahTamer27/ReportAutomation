@@ -8,6 +8,13 @@ improvements*
 # Generated reports (engine output — never commit these)
 Automation_Report_*.docx
 *_report.docx
+*_RigLess_Report_*.docx
+
+# Generated Raw Data workbooks (written beside each report from the XML)
+*_RawData.xlsx
+
+# Golden-file / speedup verification artifacts (tools/golden_report.py)
+well_tools_1/tools/_golden/
 
 # Python virtual environments
 .venv/

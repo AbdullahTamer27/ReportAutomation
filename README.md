@@ -16,11 +16,10 @@
 
 **Well Tools** runs as a native desktop window backed by a local web app (FastAPI + a vanilla-JS frontend in a [pywebview](https://pywebview.flowrl.com/) shell). Everything runs locally — no servers, no cloud, no manual copy-paste — and ships as a single `WellTools.exe`.
 
-It bundles three standalone tools:
+It bundles two tools:
 
-1. **Report Automation** — merges a **universal** Word `.docx` template with an Excel data workbook and a folder of images to produce a single, fully-populated report (tables, pie charts, images, company branding, disclaimers, and well metadata). A configuration string adapts the one template to each well's pipe layout, and an optional schematic PDF pre-fills the well details.
-2. **Interval Generator** — parses a WellSchematic XML (plus an optional thickness sheet) and writes a clean depth-interval / pipe-summary "Raw Data" sheet into an Excel template.
-3. **Ghost Merger** — merges "ghost collar" intervals in a SmartLog Joint-Analysis CSV and exports a cleaned Excel.
+1. **Report Automation** — merges a **universal** Word `.docx` template with an Excel data workbook and a folder of images to produce a single, fully-populated report (tables, pie charts, images, floating overlays, company branding, disclaimers, and well metadata). A configuration string adapts the one template to each well's pipe layout. Feed it a **WellSchematic XML** and it also derives the configuration, sets the bottom-depth / liner-hanger / shoe depths, counts the damages, and writes a clean depth-interval **Raw Data** workbook beside the report — the old standalone Interval Generator is now built in. An optional schematic PDF pre-fills the well details.
+2. **Ghost Merger** — merges "ghost collar" intervals in a SmartLog Joint-Analysis CSV and exports a cleaned Excel.
 
 **Template Manager** and **Company Manager** live *inside* Report Automation (they configure the templates and company logos it uses).
 
@@ -33,6 +32,8 @@ It bundles three standalone tools:
 - 📊 **Smart "highest metal loss" tables** — always shows the top joints and auto-expands to include **every** Class C and Class D joint.
 - 🧮 **Dynamic cross-pipe summary** — a `{{SUMMARY}}` table with **one header + one data row** is cloned per pipe at generation time (worst joint's metal loss, grade + color, max-loss depth), bottom-anchored so the first pipe lands in the last row.
 - 🥧 **Per-pipe pie charts** — matplotlib-rendered metal-loss classification pies (A/B/C/D), placed into `{{pie_<role>}}` slots. Completion-affected joints (casing shoes / DVPs / annotated rows) are excluded from the counts, exactly like the tables.
+- 🎈 **Floating overlays** — anchored text boxes filled from the data, then any unused box removed: the **well-head** damage/clean statement (`{{ovl_wellhead}}`), per-pipe **shoe / liner-hanger** callouts (`{{ovl_shoe_<role>}}`, `{{ovl_hanger_<role>}}`), and per-damage-point **metal-loss / channel** callouts inside each damage picture (`{{ovl_ml<i>_<k>}}`, `{{ovl_ch<i>_<k>}}`). The overlay pass is deliberately self-contained.
+- 🧭 **XML-driven layout** — give it a WellSchematic XML and it derives the configuration **inner→outer** (consolidating weight-change sections), sets the **bottom depth** from the deepest point, overrides each pipe's **shoe / liner-hanger depth** from the schematic, and **auto-counts the damages** (worst Class C/D per interval per pipe, clustered by depth). The channel for each damage callout is read from the workbook's THICKNESS sheet.
 - 📄 **Schematic-PDF pre-fill** — load a Well Cross Section Plot PDF to auto-fill the optional fields (well name, type, original completion, last workover) for review before generating.
 - 🖼️ **Borderless image placement** — images are sized to fit their cells with a clean border drawn on the picture; damage photos scale by N damage points, via a repeatable block **or** static `{{DMGi_j}}` slots.
 - 🏢 **Company branding** — pick a registered company; its logo fills the `{{COMP}}` body table **and** swaps the logo in every section header, while `{{COMPNAME}}` writes the name.
@@ -41,6 +42,7 @@ It bundles three standalone tools:
 - 🎨 **Grade-aware coloring** — cells shaded by grade (A/B/C/D) to match the standard severity palette.
 - 🔎 **Report notes** — engine warnings (missing images, untagged headers, grade corrections, summary mismatches, config/Excel pipe-count mismatches) surface in the UI after each run.
 - 👁️ **PDF preview** — generated reports render to page images in-app (requires Microsoft Word for the conversion).
+- ⚡ **Fast generation** — the Word document is opened and saved **once** for the whole pipeline (not once per pass), and the Excel workbook and XML schematic are each parsed once and cached. A golden-file harness (`tools/`) proves these optimizations leave the output byte-for-byte identical.
 - 📦 **Single-file build** — ships as a standalone `WellTools.exe` via PyInstaller, with persistent data in `%APPDATA%\WellTools`.
 
 ---
@@ -53,6 +55,9 @@ ReportAutomation/
     ├── run.py                    # Legacy tkinter entry point
     ├── WellTools.spec            # PyInstaller spec (single-file EXE)
     ├── build_webapp.bat          # One-click Windows build
+    ├── tools/                    # Dev harness (not shipped)
+    │   ├── golden_report.py      # Byte/behaviour-diff of two generated reports
+    │   └── verify_speedup.py     # One-command "old way vs new way" parity check
     ├── webapp/                   # Web app (primary UI)
     │   ├── app.py                # pywebview launcher (native window + file dialogs)
     │   ├── main.py               # FastAPI app: report / interval / ghost / managers
@@ -69,21 +74,24 @@ ReportAutomation/
         │   ├── xml_parser.py · intervals.py · thickness.py
         │   ├── formatting.py · excel_output.py
         └── report/               # Automation Report engine
-            ├── report_builder.py # Orchestrates the pipeline
-            ├── pipe_config.py    # Parses the configuration string → pipe model
+            ├── report_builder.py # Orchestrates the pipeline (single doc open/save)
+            ├── pipe_config.py    # Configuration string ↔ pipe model; derives config/depths from XML
             ├── pipe_sections.py  # Repeats/removes per-pipe sections; cleans conclusion lines
             ├── tables.py         # Tagged tables (joints / highest / SUMMARY)
             ├── charts.py         # Per-pipe metal-loss pie charts (matplotlib)
+            ├── damage_select.py  # Auto damage count: worst C/D per interval per pipe, clustered
+            ├── overlays.py       # Floating text-box overlays (well-head / shoe / hanger / damage)
             ├── schematic.py      # Extracts well metadata from a schematic PDF
             ├── damage_blocks.py  # Repeats the damage section N times
             ├── images.py         # Places & borders tagged images; removes unfilled slots
             ├── company.py        # Company logo (body + headers)
             ├── conditional.py    # Company-conditional lines (e.g. {{weatherford_corr}})
             ├── disclaimer.py     # {{DISC}} keep/remove
-            └── text_fields.py    # Run-preserving text-tag replacement
+            ├── text_fields.py    # Run-preserving text-tag replacement
+            └── _wbcache.py       # Per-file workbook cache (parse each Excel once)
 ```
 
-> The `well_tools/` engine is UI-agnostic; both the web app and the legacy tkinter app drive it. New features live in the web app.
+> The `well_tools/` engine is UI-agnostic; both the web app and the legacy tkinter app drive it. New features live in the web app. `overlays.py` is intentionally standalone — it shares no helpers with the rest of the engine, so an overlay bug can be found by reading that one file.
 
 ---
 
@@ -137,6 +145,17 @@ build_webapp.bat
 
 The result lands at `dist\WellTools.exe`. On first run it seeds bundled templates and company logos into `%APPDATA%\WellTools`.
 
+### Verify a pipeline change didn't alter output
+
+After any change to the report engine, prove the output is unchanged against your last successful run:
+
+```bat
+cd well_tools_1
+python tools\verify_speedup.py --xml "C:\path\to\WellSchematic.xml"
+```
+
+It generates the report both ways and reports **✅ IDENTICAL** or lists exactly what differs. Inputs are taken from the most recent successful run when not passed explicitly.
+
 ---
 
 ## How the Automation Report works
@@ -150,17 +169,18 @@ Report Automation takes:
 | **Template**       | The universal master template (managed in Template Manager).                |
 | **Configuration**  | A string describing the well's pipes — required. Drives which pipe sections are kept and what the per-pipe tags resolve to. |
 | **Company**        | Chosen from the dropdown (managed in Company Manager) — required.           |
+| **WellSchematic XML** | *Optional but recommended* — derives the configuration (inner→outer), sets the bottom depth, overrides shoe / liner-hanger depths, drives the damage count, and writes a `<wellname>_RawData.xlsx` beside the report. |
 | **Schematic PDF**  | *Optional* — a Well Cross Section Plot PDF; loading it pre-fills the well details below for review. |
 | **Well details**   | Well name, type, bottom depth, field, dates, damage count, disclaimer toggle (all optional). |
 
-**Pipeline** (`report_builder.build_automation_report`): keep/remove per-pipe sections (from the configuration) → fill tagged tables + dynamic summary → expand damage sections (×N) → keep/remove disclaimer → place & border images → place company logo + name → fill well-metadata text tags → company-conditional lines → render & place per-pipe pie charts (unfilled `{{pie_<role>}}` slots removed). Curated warnings are returned and shown as **Report notes** in the UI.
+**Pipeline** (`report_builder.build_automation_report`): keep/remove per-pipe sections (from the configuration) → fill tagged tables + dynamic summary → expand damage sections (×N) → keep/remove disclaimer → place & border images → place company logo + name → fill well-metadata text tags → company-conditional lines → render & place per-pipe pie charts (unfilled `{{pie_<role>}}` slots removed) → fill floating overlays (well-head / shoe / hanger / damage callouts; unused boxes removed). The whole pipeline runs on **one** open document and saves once. Curated warnings are returned and shown as **Report notes** in the UI.
 
 ### Configuration string
 
-Pipes are listed largest-to-smallest, separated by `-`. Each pipe is `size[(x|×)size][type]`, where `type` is `CSG` (default), `LNR`, or `TBG`, and the optional `×size` denotes a tapered string. Up to seven pipes map to the roles `firstPipe … seventhPipe`.
+Pipes are listed **inner→outer** (innermost/smallest first), separated by `-`. Each pipe is `size[(x|×)size][type]`, where `type` is `CSG` (default), `LNR`, or `TBG`, and the optional `×size` denotes a tapered string. Pipes map in order to the roles `firstPipe … seventhPipe` — so `firstPipe` is the innermost string. When a WellSchematic XML is provided the configuration is derived in this order automatically (and weight-change sections are consolidated into one pipe).
 
 ```
-18.625-13.375-9.625-7LNR-4.5x3.5TBG
+4.5TBG-7LNR-9.625-13.375-18.625
 ```
 
 Each role exposes tags (`{{firstPipe_name}}`, `{{firstPipe_suffix}}`, `{{firstPipe_shoe}}`, `{{firstPipe_highest_grade}}`, `{{pie_firstPipe}}`) and a repeatable/removable section bounded by `{{firstPipe_start}}` … `{{firstPipe_end}}`. Roles not present in the configuration have their section and any leftover tag-lines removed automatically. If the configuration lists more pipes than the workbook has sheets, **Generate** is blocked; the reverse only warns.
@@ -197,6 +217,9 @@ Bottom depth and log date are left blank (not reliably present in the schematic)
 | `{{casings}}` / `{{liners}}` / `{{tubings}}` | Comma-separated list of sizes for that pipe type, largest first. |
 | `{{proc}}`, `{{wh}}`, … | Image placeholders (`proc`, `tempgr`, `wh`, `raw`, `well`, `ts`), mapped to files in the working/IMGS folder. |
 | `{{DMG<i>_<j>}}`        | Damage photos — 3 per damage point (`DMG1_1…DMG1_3`, `DMG2_1`, …). Use a repeatable `{{damage_block_start}}`/`{{damage_block_end}}` block **or** static `{{DMGi_j}}` slots. |
+| `{{ovl_wellhead}}`      | Text box → the well-head **damage** or **clean** statement (picked by the checkbox). Never removed. |
+| `{{ovl_shoe_<role>}}` / `{{ovl_hanger_<role>}}` | Text boxes → per-pipe shoe (`18 5/8” Casing Shoe at 444.6ft`) and liner-hanger callouts. Unused boxes (absent pipe, bottom-string shoe, non-liner hanger) are removed. |
+| `{{ovl_ml<i>_<k>}}` / `{{ovl_ch<i>_<k>}}` | Text boxes inside the damage block → per-point metal-loss and channel callouts. `<i>` = damage picture (author it with `@N`, auto-numbered per clone), `<k>` = point 1–4. Unused slots removed. |
 | `{{DISC}}`              | First cell of a disclaimer table. Checked → tag removed, table kept; unchecked → whole table deleted. |
 | `{{COMP}}`              | Company logo. Put it in a borderless 1×1 table (body) **and** set it as the **Alt Text** of the logo picture in each section header (Word → right-click image → Alt Text → Description). |
 | `{{COMPNAME}}`          | Company name as text (body / headers / footers).                   |
