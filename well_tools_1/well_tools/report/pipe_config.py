@@ -166,10 +166,10 @@ def build_pipe_model(config_str, excel_path=None, review=None, xml_path=None):
     warnings = []
 
     if excel_path and os.path.isfile(excel_path):
-        import openpyxl
+        from . import _wbcache
         from .tables import read_joints, grade_for_loss
 
-        wb = openpyxl.load_workbook(excel_path, data_only=True)
+        wb = _wbcache.load(excel_path, data_only=True)
         sheets = set(wb.sheetnames)
         for p in pipes:
             p["sheet_found"] = p["sheet"] in sheets

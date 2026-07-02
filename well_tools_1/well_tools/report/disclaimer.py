@@ -55,14 +55,18 @@ def apply_disclaimer(doc, include):
     return False
 
 
-def apply_in_file(path, include, progress=None, review=None):
-    """Open `path`, apply the disclaimer choice, save in place."""
+def apply_in_file(path, include, progress=None, review=None, doc=None):
+    """Apply the disclaimer choice. When `doc` is given, operate on it and do
+    not save (caller owns the single open/save); otherwise open/save `path`."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     found = apply_disclaimer(doc, include)
-    doc.save(path)
+    if own:
+        doc.save(path)
 
     if found:
         log(f"Disclaimer: {'kept' if include else 'removed'} (tag {TAG}).")

@@ -85,15 +85,21 @@ def _process_role(body, role, keep):
 
 
 def apply_pipe_sections(template_path, output_path, present_roles, all_roles,
-                        progress=None, review=None):
-    """Open `template_path`, keep the sections of `present_roles` (strip markers)
-    and delete the sections of every other role in `all_roles`, save to
-    `output_path`. Returns {kept_roles, removed_roles}."""
+                        progress=None, review=None, doc=None):
+    """Keep the sections of `present_roles` (strip markers) and delete the
+    sections of every other role in `all_roles`. Returns {kept_roles,
+    removed_roles}.
+
+    When `doc` is given, operate on that live document and do not save (the
+    caller owns the single open/save). Otherwise open `template_path` and save
+    to `output_path` as before."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
     present = set(present_roles)
-    doc = Document(template_path)
+    own = doc is None
+    if own:
+        doc = Document(template_path)
     body = doc.element.body
 
     kept_roles, removed_roles, found_any = [], [], False
@@ -110,7 +116,8 @@ def apply_pipe_sections(template_path, output_path, present_roles, all_roles,
     if pruned:
         log(f"Removed {pruned} line(s) referencing absent pipe(s).")
 
-    doc.save(output_path)
+    if own:
+        doc.save(output_path)
 
     if found_any:
         log(f"Pipe sections: kept {kept_roles or '—'}, removed {removed_roles or '—'}.")

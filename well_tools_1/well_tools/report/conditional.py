@@ -30,15 +30,18 @@ def _paragraph_text(p):
     return "".join(t.text or "" for t in p.iter(_W_T))
 
 
-def apply_conditional_lines(path, mapping, progress=None, review=None):
-    """Apply a {tag: keep_bool} mapping to the body paragraphs of `path`.
+def apply_conditional_lines(path, mapping, progress=None, review=None, doc=None):
+    """Apply a {tag: keep_bool} mapping to the body paragraphs.
 
     For each tagged paragraph: keep & strip the tag if keep is True, else remove
-    the paragraph. Saves in place. Returns {tag: {"kept": n, "removed": n}}."""
+    the paragraph. Returns {tag: {"kept": n, "removed": n}}. When `doc` is given,
+    operate on it and do not save; otherwise open and save `path` as before."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     body = doc.element.body
     results = {}
 
@@ -71,5 +74,6 @@ def apply_conditional_lines(path, mapping, progress=None, review=None):
         else:
             log(f"Conditional {tag}: no lines found.")
 
-    doc.save(path)
+    if own:
+        doc.save(path)
     return results

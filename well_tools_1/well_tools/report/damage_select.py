@@ -34,9 +34,9 @@ def _interval_of(depth, intervals):
 
 def _cd_damages(excel_path, pipes):
     """Every Class C/D joint across the pipes: (role, suffix, depth, grade, loss)."""
-    import openpyxl
+    from . import _wbcache
     from .tables import read_joints, grade_for_loss, MAX_LOSS_IDX, MAX_LOSS_DEPTH_IDX
-    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    wb = _wbcache.load(excel_path, data_only=True)
     have = set(wb.sheetnames)
     out = []
     for p in pipes:

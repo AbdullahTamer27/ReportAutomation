@@ -105,11 +105,14 @@ def _fill_body_logo(doc, logo_path):
 
 
 # ---------------- Orchestration ----------------
-def place_company_logo(path, logo_path, company_name=None, progress=None, review=None):
-    """Open `path` and apply the chosen company: insert `logo_path` into the body
-    {{COMP}} table and every header picture tagged {{COMP}}, and replace the
-    {{COMPNAME}} text tag with `company_name` (body/headers/footers). Saves in
-    place. Returns counts."""
+def place_company_logo(path, logo_path, company_name=None, progress=None, review=None,
+                       doc=None):
+    """Apply the chosen company: insert `logo_path` into the body {{COMP}} table
+    and every header picture tagged {{COMP}}, and replace the {{COMPNAME}} text
+    tag with `company_name` (body/headers/footers). Returns counts.
+
+    When `doc` is given, operate on that live document and do not save (the
+    caller owns the single open/save); otherwise open and save `path` as before."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
@@ -120,11 +123,14 @@ def place_company_logo(path, logo_path, company_name=None, progress=None, review
     with open(logo_path, "rb") as f:
         logo_bytes = f.read()
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     body_done = _fill_body_logo(doc, logo_path)
     headers_done = _swap_header_logos(doc, logo_bytes)
     name_done = _replace_company_name(doc, company_name) if company_name else 0
-    doc.save(path)
+    if own:
+        doc.save(path)
 
     # A template normally carries the logo in only ONE place (body table OR
     # header pictures), so a missing location is expected — log it, don't warn.

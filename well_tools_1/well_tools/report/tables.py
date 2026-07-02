@@ -447,19 +447,24 @@ def fill_summary_table(table, wb, sheets, pipe_order, highest_top_n,
 # ---------------- Orchestration ----------------
 def fill_report_tables(template_path, workbook_path, output_path,
                        highest_top_n=HIGHEST_TOP_N, progress=None, review=None,
-                       pipe_model=None):
-    """Fill all tagged tables in `template_path` from `workbook_path` and save to
-    `output_path`. Returns a result dict: {filled, deleted, used, warnings}.
+                       pipe_model=None, doc=None):
+    """Fill all tagged tables from `workbook_path`. Returns a result dict:
+    {filled, deleted, used, warnings}.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
-    curated review items (failures, warnings, data-sanity flags)."""
+    curated review items (failures, warnings, data-sanity flags). When `doc` is
+    given, operate on it and do not save (caller owns the single open/save);
+    otherwise open `template_path` and save to `output_path`."""
     log = progress or print
     rev = review or (lambda m: None)
 
-    wb = openpyxl.load_workbook(workbook_path, data_only=True)
+    from . import _wbcache
+    wb = _wbcache.load(workbook_path, data_only=True)
     sheets = set(wb.sheetnames)
 
-    doc = Document(template_path)
+    own = doc is None
+    if own:
+        doc = Document(template_path)
 
     # Snapshot the tables up front (we'll be modifying the doc)
     tables = list(doc.tables)
@@ -547,7 +552,9 @@ def fill_report_tables(template_path, workbook_path, output_path,
         warnings.append(f"sheet '{s}' has no matching tag in template")
         rev(f"⚠ Sheet '{s}' exists but has no matching tag in the template")
 
-    doc.save(output_path)
-    log(f"Tables: filled {filled}, deleted {deleted}. Saved -> {output_path}")
+    if own:
+        doc.save(output_path)
+    log(f"Tables: filled {filled}, deleted {deleted}."
+        + (f" Saved -> {output_path}" if own else ""))
 
     return {"filled": filled, "deleted": deleted, "used": used, "warnings": warnings}

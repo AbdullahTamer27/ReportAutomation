@@ -223,14 +223,19 @@ def _damage_mapping(clusters):
 
 # --- Public entry point ------------------------------------------------------
 def apply_overlays(path, wellhead_damage=None, pipe_model=None, excel_path=None,
-                   damage_clusters=None, progress=None, review=None):
-    """Fill overlay text boxes in the document at `path` (edited in place).
+                   damage_clusters=None, progress=None, review=None, doc=None):
+    """Fill overlay text boxes in the document.
 
     `wellhead_damage`: True -> damage statement, False -> clean, None -> skip.
     `pipe_model` + `excel_path`: enable the shoe/hanger callouts.
     `damage_clusters`: the damage-picture clusters — enables the per-point
     metal-loss / channel callouts inside each damage block.
     Unfilled variable slots (shoe/hanger/ml/ch) are removed. Returns boxes filled.
+
+    When `doc` is given, operate on that live document and do not save (the
+    caller owns the single open/save); otherwise open and save `path`. Taking a
+    document object in is the module's only touch-point with the engine — no
+    behaviour is shared — so it stays self-contained.
     """
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
@@ -246,10 +251,12 @@ def apply_overlays(path, wellhead_damage=None, pipe_model=None, excel_path=None,
     if damage_clusters:
         mapping.update(_damage_mapping(damage_clusters))
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     filled = _replace_in_textboxes(doc, mapping)
     removed = _remove_unfilled_boxes(doc) if (pipe_model or damage_clusters) else 0
-    if filled or removed:
+    if own and (filled or removed):
         doc.save(path)
 
     log(f"Overlays: filled {filled} box(es), removed {removed} unused.")

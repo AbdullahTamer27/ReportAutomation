@@ -279,18 +279,22 @@ def place_images_by_alttext(doc, img_folder, tag_to_file, progress=None, review=
 def place_report_images(template_path, img_folder, output_path,
                         tag_to_file=None, img_width=DEFAULT_IMG_WIDTH,
                         max_height=DEFAULT_MAX_HEIGHT, progress=None,
-                        border_pt=0.75, border_color="000000", review=None):
-    """Place tagged images from `img_folder` into `template_path`, save to
-    `output_path`. Returns {placed, skipped, missing}.
+                        border_pt=0.75, border_color="000000", review=None, doc=None):
+    """Place tagged images from `img_folder` into the document. Returns
+    {placed, skipped, missing}.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
-    curated review items (images not placed + reason, and a final summary)."""
+    curated review items (images not placed + reason, and a final summary).
+    When `doc` is given, operate on it and do not save (caller owns the single
+    open/save); otherwise open `template_path` and save to `output_path`."""
     log = progress or print
     rev = review or (lambda m: None)
     if tag_to_file is None:
         tag_to_file = TAG_TO_FILE
 
-    doc = Document(template_path)
+    own = doc is None
+    if own:
+        doc = Document(template_path)
     placed, skipped, missing = 0, 0, []
 
     for table in doc.tables:
@@ -324,8 +328,10 @@ def place_report_images(template_path, img_folder, output_path,
     skipped += a_skipped
     missing += a_missing
 
-    doc.save(output_path)
+    if own:
+        doc.save(output_path)
     rev(f"Images — placed {placed}, skipped {skipped}"
         + (f" (missing: {', '.join(missing)})" if missing else ""))
-    log(f"Images: placed {placed}, skipped {skipped}. Saved -> {output_path}")
+    log(f"Images: placed {placed}, skipped {skipped}."
+        + (f" Saved -> {output_path}" if own else ""))
     return {"placed": placed, "skipped": skipped, "missing": missing}

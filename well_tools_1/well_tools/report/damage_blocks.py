@@ -153,14 +153,19 @@ def expand_damage_blocks(doc, damage_count):
     return True
 
 
-def expand_in_file(path, damage_count, progress=None, review=None):
-    """Open `path`, expand the damage block `damage_count` times, save in place."""
+def expand_in_file(path, damage_count, progress=None, review=None, doc=None):
+    """Expand the damage block `damage_count` times. When `doc` is given, operate
+    on it and do not save (caller owns the single open/save); otherwise open and
+    save `path` as before."""
     log = progress or (lambda m: None)
     rev = review or (lambda m: None)
 
-    doc = Document(path)
+    own = doc is None
+    if own:
+        doc = Document(path)
     found = expand_damage_blocks(doc, damage_count)
-    doc.save(path)
+    if own:
+        doc.save(path)
 
     if found:
         log(f"Damage sections: block expanded x{int(damage_count)}.")
