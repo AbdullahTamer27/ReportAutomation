@@ -84,21 +84,30 @@ def build():
     openpyxl.Workbook().save(os.path.join(HERE, "data.xlsx"))
 
     # --- inputs.json ---
+    # A `base` of common inputs plus a list of `scenarios` that override it. Each
+    # scenario is generated and compared to its own golden__<name>.docx, so a
+    # single template/data set pins several input combinations (0 vs N damages,
+    # disclaimer on/off, …) — the thing a single fixed input could never cover.
     inputs = {
-        "config": None,
-        "company_name": "ACME",
-        "company_logo": None,
-        "damage_count": 1,
-        "wellhead_damage": True,
-        "include_disclaimer": False,
-        "well_name": "SYNTH_1_0",
-        "well_type": "Oil producer",
-        "btm_depth": "7000 ft",
-        "field": "Testland",
-        "log_date": "2020-09-09",
-        "orig_comp": "1981/07/13",
-        "last_wko": "2013/09/06 #4",
-        "xml": None,
+        "base": {
+            "config": None,
+            "company_name": "ACME",
+            "company_logo": None,
+            "wellhead_damage": True,
+            "well_name": "SYNTH_1_0",
+            "well_type": "Oil producer",
+            "btm_depth": "7000 ft",
+            "field": "Testland",
+            "log_date": "2020-09-09",
+            "orig_comp": "1981/07/13",
+            "last_wko": "06-Sep-2013 #4",
+            "xml": None,
+        },
+        "scenarios": [
+            {"name": "no_damage", "damage_count": 0, "include_disclaimer": False},
+            {"name": "one_damage", "damage_count": 1, "include_disclaimer": False},
+            {"name": "three_damage_disclaimer", "damage_count": 3, "include_disclaimer": True},
+        ],
     }
     with open(os.path.join(HERE, "inputs.json"), "w") as f:
         json.dump(inputs, f, indent=2)

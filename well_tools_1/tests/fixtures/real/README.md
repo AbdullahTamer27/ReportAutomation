@@ -15,19 +15,48 @@ prove a full, realistic report generation never changes unexpectedly.
 
 ### `inputs.json`
 
+Simplest form — one scenario, compared to `golden.docx`:
+
 ```json
 {
   "config": "4.5TBG-7LNR-9.625-13.375-18.625",
-  "company": null,
+  "company_name": null,
+  "company_logo": null,
   "damage_count": 0,
   "wellhead_damage": false,
   "include_disclaimer": false,
   "well_name": "SAMPLE_1_0",
   "field": "",
   "well_type": "",
-  "notes": "Anything sensitive should be scrubbed — this gets committed to git."
+  "log_date": "",
+  "orig_comp": "",
+  "last_wko": "",
+  "xml": "schematic.xml"
 }
 ```
+
+**Recommended — multiple scenarios from the same files** (each pinned to its own
+`golden__<name>.docx`), so one dataset validates several input combinations:
+
+```json
+{
+  "base": {
+    "config": "4.5TBG-7LNR-9.625-13.375-18.625",
+    "company_name": null, "company_logo": null,
+    "wellhead_damage": true, "well_name": "SAMPLE_1_0",
+    "xml": "schematic.xml"
+  },
+  "scenarios": [
+    {"name": "auto_damage",           "damage_count": 3, "include_disclaimer": false},
+    {"name": "no_damage",             "damage_count": 0, "include_disclaimer": false},
+    {"name": "with_disclaimer",       "damage_count": 3, "include_disclaimer": true}
+  ]
+}
+```
+
+Any field left out of a scenario falls back to `base`. Set `"xml": false` to
+generate without a schematic. Anything sensitive should be scrubbed — this is
+committed to git.
 
 ## Sanitize before committing
 

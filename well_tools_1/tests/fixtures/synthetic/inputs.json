@@ -1,16 +1,33 @@
 {
-  "config": null,
-  "company_name": "ACME",
-  "company_logo": null,
-  "damage_count": 1,
-  "wellhead_damage": true,
-  "include_disclaimer": false,
-  "well_name": "SYNTH_1_0",
-  "well_type": "Oil producer",
-  "btm_depth": "7000 ft",
-  "field": "Testland",
-  "log_date": "2020-09-09",
-  "orig_comp": "1981/07/13",
-  "last_wko": "2013/09/06 #4",
-  "xml": null
+  "base": {
+    "config": null,
+    "company_name": "ACME",
+    "company_logo": null,
+    "wellhead_damage": true,
+    "well_name": "SYNTH_1_0",
+    "well_type": "Oil producer",
+    "btm_depth": "7000 ft",
+    "field": "Testland",
+    "log_date": "2020-09-09",
+    "orig_comp": "1981/07/13",
+    "last_wko": "06-Sep-2013 #4",
+    "xml": null
+  },
+  "scenarios": [
+    {
+      "name": "no_damage",
+      "damage_count": 0,
+      "include_disclaimer": false
+    },
+    {
+      "name": "one_damage",
+      "damage_count": 1,
+      "include_disclaimer": false
+    },
+    {
+      "name": "three_damage_disclaimer",
+      "damage_count": 3,
+      "include_disclaimer": true
+    }
+  ]
 }
