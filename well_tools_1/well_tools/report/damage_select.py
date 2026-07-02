@@ -75,16 +75,13 @@ def _resolve_channel(sections, od, intervals, iv):
     return _mode_for_pipe(sections, od, start, end, "channel", _format_channel)
 
 
-def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WINDOW_FT):
-    """Return {pictures, count, warnings}. `pictures` is a list of clusters; each
-    cluster is a list of damage dicts that share one picture."""
-    intervals = _intervals_from_xml(xml_path)
-    warnings = []
-
-    # Worst C/D damage per (interval, pipe).
+def _worst_per_interval_pipe(damages, intervals):
+    """Keep the single worst C/D damage per (interval, pipe). Returns
+    ``(reps, skipped)`` where each rep gains an ``interval`` index and ``skipped``
+    counts damages whose depth fell outside every interval. Pure (no I/O)."""
     best = {}
     skipped = 0
-    for d in _cd_damages(excel_path, pipes):
+    for d in damages:
         iv = _interval_of(d["depth"], intervals)
         if iv is None:
             skipped += 1
@@ -94,7 +91,38 @@ def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WIND
         rank = (_SEVERITY[d["grade"]], d["loss"], -d["depth"])
         if key not in best or rank > best[key][0]:
             best[key] = (rank, d)
-    reps = [v[1] for v in best.values()]
+    return [v[1] for v in best.values()], skipped
+
+
+def _cluster_by_window(reps, depth_window=DEPTH_WINDOW_FT):
+    """Group reps that share an interval into pictures: within an interval,
+    reps within `depth_window` ft of a cluster's *start* depth join that cluster.
+    Pictures are returned shallowest-first. Pure (no I/O).
+
+    So N damage points at (near) the same depth in one interval — e.g. one per
+    pipe — collapse into a SINGLE picture holding all N points."""
+    pictures = []
+    for iv in sorted({r["interval"] for r in reps}):
+        grp = sorted((r for r in reps if r["interval"] == iv), key=lambda r: r["depth"])
+        clusters = []
+        for r in grp:
+            if clusters and r["depth"] - clusters[-1][0]["depth"] <= depth_window:
+                clusters[-1].append(r)
+            else:
+                clusters.append([r])
+        pictures.extend(clusters)
+    pictures.sort(key=lambda c: min(x["depth"] for x in c))
+    return pictures
+
+
+def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WINDOW_FT):
+    """Return {pictures, count, warnings}. `pictures` is a list of clusters; each
+    cluster is a list of damage dicts that share one picture."""
+    intervals = _intervals_from_xml(xml_path)
+    warnings = []
+
+    # Worst C/D damage per (interval, pipe).
+    reps, skipped = _worst_per_interval_pipe(_cd_damages(excel_path, pipes), intervals)
     if skipped:
         warnings.append(f"{skipped} C/D damage(s) fell outside the schematic depth "
                         f"range and were not counted.")
@@ -109,17 +137,7 @@ def compute_damage_pictures(xml_path, excel_path, pipes, depth_window=DEPTH_WIND
                                         intervals, d["interval"])
 
     # Cluster within each interval by the depth window (anchored to cluster start).
-    pictures = []
-    for iv in sorted({r["interval"] for r in reps}):
-        grp = sorted((r for r in reps if r["interval"] == iv), key=lambda r: r["depth"])
-        clusters = []
-        for r in grp:
-            if clusters and r["depth"] - clusters[-1][0]["depth"] <= depth_window:
-                clusters[-1].append(r)
-            else:
-                clusters.append([r])
-        pictures.extend(clusters)
-    pictures.sort(key=lambda c: min(x["depth"] for x in c))
+    pictures = _cluster_by_window(reps, depth_window)
     return {"pictures": pictures, "count": len(pictures), "warnings": warnings}
 
 

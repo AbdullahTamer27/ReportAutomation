@@ -16,6 +16,15 @@ Automation_Report_*.docx
 # Golden-file / speedup verification artifacts (tools/golden_report.py)
 well_tools_1/tools/_golden/
 
+# Real test fixtures: large (tens of MB) and machine-specific (chart pixels differ
+# across OSes), so they stay LOCAL. Only README.md + inputs.json are committed;
+# each dev drops their own template/data/xml/images/goldens locally.
+well_tools_1/tests/fixtures/real/*.docx
+well_tools_1/tests/fixtures/real/*.xlsm
+well_tools_1/tests/fixtures/real/*.xlsx
+well_tools_1/tests/fixtures/real/*.xml
+well_tools_1/tests/fixtures/real/IMGS/
+
 # Python virtual environments
 .venv/
 venv/
