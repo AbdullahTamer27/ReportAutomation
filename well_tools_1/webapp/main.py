@@ -56,6 +56,7 @@ from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
 from well_tools.report.pipe_config import (  # noqa: E402
     build_pipe_model, ConfigParseError, deepest_point_from_xml, format_depth,
 )
+from . import report_service  # noqa: E402
 
 # --- Logging -----------------------------------------------------------------
 logging.basicConfig(
@@ -552,138 +553,38 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         req.include_disclaimer, req.excel_path, req.working_dir,
     )
 
-    review_notes: list[str] = []
-
     def on_progress(msg):
         logger.info("[progress] %s", msg)
 
     def on_review(msg):
         logger.info("[review]   %s", msg)
-        review_notes.append(str(msg))
 
-    # Output filename: wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx
-    output_path = os.path.join(
-        req.working_dir,
-        _report_filename(req.well_name, _normalize_date(req.log_date), company.name),
-    )
-
-    # Plain-text tags replaced anywhere in the document (run-preserving). These
-    # fields are OPTIONAL (only configuration, company, and number of damages are
-    # required): a blank gets a default value and a warning in the report notes.
-    # Date fields are normalized to DD-Mon-YYYY; non-dates ("N/A") pass through.
-    OPTIONAL_DEFAULT = "N/A"
-    defaulted = []
-
-    def _opt(value, label):
-        if value is None or not str(value).strip():
-            defaulted.append(label)
-            return OPTIONAL_DEFAULT
-        return str(value)
-
-    def _opt_date(value, label):
-        if value is None or not str(value).strip():
-            defaulted.append(label)
-            return OPTIONAL_DEFAULT
-        return _normalize_date(value)
-
-    text_fields = {
-        "{{well_name}}": _opt(req.well_name, "Well name"),
-        "{{well_type}}": _opt(req.well_type, "Well type"),
-        "{{btm_depth}}": _opt(req.btm_depth, "Bottom depth"),
-        "{{field}}": _opt(req.field, "Field"),
-        "{{log_date}}": _opt_date(req.log_date, "Log date"),
-        "{{orig_comp}}": _opt_date(req.orig_comp, "Original completion"),
-        "{{last_wko}}": _opt_date(req.last_wko, "Last workover"),
-        # Delivery date = today's date, formatted like the other dates. Auto-filled.
-        "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
-    }
-    if defaulted:
-        review_notes.append(
-            f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
-        )
-    # Auto-derived tags never nag if a template doesn't use them.
-    text_fields_quiet = {"{{delivery_date}}"}
-
-    # Company-conditional lines: kept only when that company is chosen.
-    is_weatherford = (company.name or "").strip().lower() == "weatherford"
-    conditional_lines = {"{{weatherford_corr}}": is_weatherford}
-
-    # Universal master template: parse the configuration into the pipe model and
-    # add each pipe's metadata tags. Absent here ⇒ legacy per-config template.
-    pipe_model = None
-    if req.config and req.config.strip():
-        from well_tools.report.pipe_config import sizes_list_string  # noqa: E402
-        try:
-            pm = build_pipe_model(req.config, req.excel_path, review=on_review,
-                                  xml_path=req.xml_path)
-        except ConfigParseError as e:
-            raise HTTPException(status_code=400, detail=f"Configuration: {e}")
-        pipe_model = pm["pipes"]
-        for p in pipe_model:
-            role = p["role"]
-            for key, val in (("name", p["name"]), ("suffix", p["suffix"]),
-                             ("shoe", p["shoe_text"]), ("highest_grade", p["highest_severity"])):
-                tag = f"{{{{{role}_{key}}}}}"
-                text_fields[tag] = val
-                text_fields_quiet.add(tag)
-        # Casing / liner / tubing size lists (sizes only, largest first).
-        for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
-            text_fields[tag] = sizes_list_string(pipe_model, code)
-            text_fields_quiet.add(tag)
-
-    # Damage-section overlays: the picture clusters (worst C/D per pipe per
-    # interval), enriched with severity + THICKNESS channel. Needs the XML.
-    damage_clusters = None
-    if pipe_model is not None and req.xml_path and os.path.isfile(req.xml_path):
-        try:
-            from well_tools.report.damage_select import compute_damage_pictures
-            damage_clusters = compute_damage_pictures(
-                req.xml_path, req.excel_path, pipe_model)["pictures"]
-        except Exception as e:  # noqa: BLE001 — overlays are best-effort
-            logger.exception("Damage-cluster computation failed")
-            review_notes.append(f"⚠ Damage overlays skipped — {e}")
-
-    # Fold in the Interval Generator: build the Raw Data table from the XML into a
-    # SEPARATE workbook beside the report — the data Excel is never opened for
-    # writing, so its macro-computed grades/bars stay intact. Non-fatal.
-    if req.xml_path:
-        stem = _safe_filename(req.well_name) if req.well_name else "well"
-        rawdata_path = os.path.join(req.working_dir, f"{stem}_RawData.xlsx")
-        try:
-            rd = generate_raw_data_file(req.xml_path, rawdata_path, data_excel=req.excel_path)
-            note = f"Raw Data written to {os.path.basename(rawdata_path)}"
-            note += " (with 'intervals MAIN')." if rd.get("intervals_main") \
-                else " — note: no 'intervals MAIN' sheet found in the data Excel."
-            review_notes.append(note)
-        except PermissionError:
-            review_notes.append(f"⚠ Raw Data not written — {os.path.basename(rawdata_path)} "
-                                "is open. Close it and regenerate.")
-        except IntervalInputError as e:
-            review_notes.append(f"⚠ Raw Data not written — {e}")
-        except Exception as e:  # noqa: BLE001
-            logger.exception("Raw Data write failed")
-            review_notes.append(f"⚠ Raw Data not written — {e}")
-
+    # Orchestration lives in the transport-agnostic service; the endpoint only
+    # resolves DB entities, maps errors to HTTP, and records the run.
     try:
-        output_path = build_automation_report(
-            word_template_path=template.file_path,
-            excel_data_path=req.excel_path,
+        result = report_service.generate(
+            template_path=template.file_path,
+            company_name=company.name,
+            company_logo_path=company.logo_path,
+            excel_path=req.excel_path,
             working_dir=req.working_dir,
-            output_path=output_path,
+            xml_path=req.xml_path,
+            config=req.config,
             damage_count=req.damage_count,
             include_disclaimer=req.include_disclaimer,
-            company_logo_path=company.logo_path,
-            company_name=company.name,
-            text_fields=text_fields,
-            conditional_lines=conditional_lines,
-            pipe_model=pipe_model,
-            text_fields_quiet=text_fields_quiet,
             wellhead_damage=req.wellhead_damage,
-            damage_clusters=damage_clusters,
-            single_doc_io=True,   # open the Word file once, save once (verified identical)
+            well_name=req.well_name,
+            well_type=req.well_type,
+            btm_depth=req.btm_depth,
+            field=req.field,
+            log_date=req.log_date,
+            orig_comp=req.orig_comp,
+            last_wko=req.last_wko,
             progress=on_progress,
             review=on_review,
         )
+    except ConfigParseError as e:
+        raise HTTPException(status_code=400, detail=f"Configuration: {e}")
     except ReportInputError as e:
         logger.warning("Input error: %s", e)
         _record_run(db, template.id, req, None, "failed")
@@ -693,6 +594,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         _record_run(db, template.id, req, None, "failed")
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
 
+    output_path = result["output_path"]
     run = _record_run(db, template.id, req, output_path, "success")
     logger.info("Report generated: %s (run_id=%s)", output_path, run.id)
     return GenerateResponse(
@@ -702,68 +604,8 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
         status=run.status,
         output_path=output_path,
         filename=os.path.basename(output_path),
-        notes=review_notes,
+        notes=result["notes"],
     )
-
-
-# Accepted date inputs, parsed in order and reformatted to DD-Mon-YYYY.
-# Ambiguous numeric forms are read day-first (regional convention).
-_DATE_INPUT_FORMATS = (
-    "%d-%b-%Y", "%d-%B-%Y",          # 09-Sep-2020 / 09-September-2020 (target-ish)
-    "%Y-%m-%d", "%Y/%m/%d",          # ISO (also what a date picker yields)
-    "%d %b %Y", "%d %B %Y",          # 09 Sep 2020 / 09 September 2020
-    "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y",   # day-first numeric
-    "%b %d, %Y", "%B %d, %Y", "%b %d %Y",  # Sep 9, 2020
-)
-_DATE_OUTPUT_FORMAT = "%d-%b-%Y"     # -> 09-Sep-2020
-
-
-def _normalize_date(value):
-    """Reformat a date-like string to DD-Mon-YYYY (e.g. 09-Sep-2020).
-
-    Tries a fixed set of common formats; if none match (e.g. "N/A", "", or free
-    text), the original value is returned unchanged so the report still fills it.
-    """
-    if value is None:
-        return ""
-    s = str(value).strip()
-    if not s:
-        return ""
-    for fmt in _DATE_INPUT_FORMATS:
-        try:
-            return datetime.strptime(s, fmt).strftime(_DATE_OUTPUT_FORMAT)
-        except ValueError:
-            continue
-    return s
-
-
-def _safe_filename(name: str) -> str:
-    """Make a filesystem-safe stem from a well name."""
-    s = re.sub(r"[^A-Za-z0-9._ -]", "_", name).strip().strip(".")
-    return s
-
-
-def _output_path_for(working_dir: str, well_name):
-    """Build an output .docx path from the well name, or None to let the engine
-    use its timestamped default."""
-    if not well_name:
-        return None
-    stem = _safe_filename(well_name)
-    if not stem:
-        return None
-    return os.path.join(working_dir, f"{stem}_report.docx")
-
-
-def _report_filename(well_name, log_date_disp, company_name):
-    """wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx (blanks → 'NA')."""
-    parts = [
-        (well_name or "").strip() or "NA",
-        (log_date_disp or "").strip() or "NA",
-        "EPDT", "RIGLESS", "REPORT",
-        (company_name or "").strip() or "NA",
-    ]
-    stem = _safe_filename("_".join(parts)).replace(" ", "_")
-    return f"{stem}.docx"
 
 
 @app.post("/api/preview/{run_id}", response_model=PreviewResponse)

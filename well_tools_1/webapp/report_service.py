@@ -1,0 +1,167 @@
+"""Report-generation orchestration — the transport-agnostic core.
+
+This is the seam between *what a report is* and *how the request arrived*. It
+takes already-resolved, plain inputs (file paths, well fields, flags) and drives
+the engine: builds the text tags, parses the configuration into a pipe model,
+computes the damage clusters, writes the Raw Data workbook, and calls the report
+builder. It returns ``{output_path, notes}``.
+
+It raises domain errors (``ConfigParseError`` from a bad configuration,
+``ReportInputError`` from the builder) rather than HTTP errors, so the caller —
+today ``webapp.main``, tomorrow possibly an upload endpoint or a CLI — decides how
+to surface them. No FastAPI, no database, no request objects here.
+"""
+
+import os
+from datetime import datetime
+
+from well_tools.report.report_builder import build_automation_report  # noqa: F401
+from well_tools.report.pipe_config import (
+    build_pipe_model, ConfigParseError, sizes_list_string,  # noqa: F401
+)
+
+from .naming import normalize_date, safe_filename, report_filename
+from .interval import generate_raw_data_file, IntervalInputError
+
+OPTIONAL_DEFAULT = "N/A"
+
+
+def generate(*, template_path, company_name, company_logo_path,
+             excel_path, working_dir, xml_path,
+             config, damage_count=0, include_disclaimer=False, wellhead_damage=None,
+             well_name=None, well_type=None, btm_depth=None, field=None,
+             log_date=None, orig_comp=None, last_wko=None,
+             progress=None, review=None):
+    """Generate a report and return ``{"output_path": str, "notes": [str, ...]}``.
+
+    ``progress`` / ``review`` are optional callbacks used for streaming/logging;
+    every review message is also captured in the returned ``notes`` list.
+    Raises ``ConfigParseError`` for an unparseable configuration and
+    ``ReportInputError`` (or other exceptions) from the builder.
+    """
+    notes: list[str] = []
+    log = progress or (lambda m: None)
+
+    def on_review(msg):
+        # Engine review messages: capture for the caller AND forward for logging.
+        notes.append(str(msg))
+        if review:
+            review(msg)
+
+    # Output filename: wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx
+    output_path = os.path.join(
+        working_dir,
+        report_filename(well_name, normalize_date(log_date), company_name),
+    )
+
+    # Plain-text tags replaced anywhere in the document (run-preserving). These
+    # fields are OPTIONAL (only configuration, company, and number of damages are
+    # required): a blank gets a default value and a warning in the report notes.
+    # Date fields are normalized to DD-Mon-YYYY; non-dates ("N/A") pass through.
+    defaulted = []
+
+    def _opt(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return str(value)
+
+    def _opt_date(value, label):
+        if value is None or not str(value).strip():
+            defaulted.append(label)
+            return OPTIONAL_DEFAULT
+        return normalize_date(value)
+
+    text_fields = {
+        "{{well_name}}": _opt(well_name, "Well name"),
+        "{{well_type}}": _opt(well_type, "Well type"),
+        "{{btm_depth}}": _opt(btm_depth, "Bottom depth"),
+        "{{field}}": _opt(field, "Field"),
+        "{{log_date}}": _opt_date(log_date, "Log date"),
+        "{{orig_comp}}": _opt_date(orig_comp, "Original completion"),
+        "{{last_wko}}": _opt_date(last_wko, "Last workover"),
+        # Delivery date = today's date, formatted like the other dates. Auto-filled.
+        "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
+    }
+    if defaulted:
+        notes.append(
+            f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
+        )
+    # Auto-derived tags never nag if a template doesn't use them.
+    text_fields_quiet = {"{{delivery_date}}"}
+
+    # Company-conditional lines: kept only when that company is chosen.
+    is_weatherford = (company_name or "").strip().lower() == "weatherford"
+    conditional_lines = {"{{weatherford_corr}}": is_weatherford}
+
+    # Universal master template: parse the configuration into the pipe model and
+    # add each pipe's metadata tags. Absent here ⇒ legacy per-config template.
+    pipe_model = None
+    if config and config.strip():
+        pm = build_pipe_model(config, excel_path, review=on_review, xml_path=xml_path)
+        pipe_model = pm["pipes"]
+        for p in pipe_model:
+            role = p["role"]
+            for key, val in (("name", p["name"]), ("suffix", p["suffix"]),
+                             ("shoe", p["shoe_text"]), ("highest_grade", p["highest_severity"])):
+                tag = f"{{{{{role}_{key}}}}}"
+                text_fields[tag] = val
+                text_fields_quiet.add(tag)
+        # Casing / liner / tubing size lists (sizes only, largest first).
+        for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
+            text_fields[tag] = sizes_list_string(pipe_model, code)
+            text_fields_quiet.add(tag)
+
+    # Damage-section overlays: the picture clusters (worst C/D per pipe per
+    # interval), enriched with severity + THICKNESS channel. Needs the XML.
+    damage_clusters = None
+    if pipe_model is not None and xml_path and os.path.isfile(xml_path):
+        try:
+            from well_tools.report.damage_select import compute_damage_pictures
+            damage_clusters = compute_damage_pictures(
+                xml_path, excel_path, pipe_model)["pictures"]
+        except Exception as e:  # noqa: BLE001 — overlays are best-effort
+            log(f"Damage-cluster computation failed: {e}")
+            notes.append(f"⚠ Damage overlays skipped — {e}")
+
+    # Fold in the Interval Generator: build the Raw Data table from the XML into a
+    # SEPARATE workbook beside the report — the data Excel is never opened for
+    # writing, so its macro-computed grades/bars stay intact. Non-fatal.
+    if xml_path:
+        stem = safe_filename(well_name) if well_name else "well"
+        rawdata_path = os.path.join(working_dir, f"{stem}_RawData.xlsx")
+        try:
+            rd = generate_raw_data_file(xml_path, rawdata_path, data_excel=excel_path)
+            note = f"Raw Data written to {os.path.basename(rawdata_path)}"
+            note += " (with 'intervals MAIN')." if rd.get("intervals_main") \
+                else " — note: no 'intervals MAIN' sheet found in the data Excel."
+            notes.append(note)
+        except PermissionError:
+            notes.append(f"⚠ Raw Data not written — {os.path.basename(rawdata_path)} "
+                         "is open. Close it and regenerate.")
+        except IntervalInputError as e:
+            notes.append(f"⚠ Raw Data not written — {e}")
+        except Exception as e:  # noqa: BLE001
+            log(f"Raw Data write failed: {e}")
+            notes.append(f"⚠ Raw Data not written — {e}")
+
+    output_path = build_automation_report(
+        word_template_path=template_path,
+        excel_data_path=excel_path,
+        working_dir=working_dir,
+        output_path=output_path,
+        damage_count=damage_count,
+        include_disclaimer=include_disclaimer,
+        company_logo_path=company_logo_path,
+        company_name=company_name,
+        text_fields=text_fields,
+        conditional_lines=conditional_lines,
+        pipe_model=pipe_model,
+        text_fields_quiet=text_fields_quiet,
+        wellhead_damage=wellhead_damage,
+        damage_clusters=damage_clusters,
+        single_doc_io=True,   # open the Word file once, save once (verified identical)
+        progress=log,
+        review=on_review,
+    )
+    return {"output_path": output_path, "notes": notes}
