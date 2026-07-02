@@ -1,0 +1,8 @@
+# Development / test dependencies. Install with:
+#   pip install -r dev-requirements.txt
+#
+# The app itself is installed from webapp/requirements.txt; these are only needed
+# to run the test suite.
+
+pytest
+pytest-cov
