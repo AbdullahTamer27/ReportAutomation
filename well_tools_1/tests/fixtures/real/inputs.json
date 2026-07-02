@@ -1,0 +1,13 @@
+{
+  "base": {
+    "config": "4.5TBG-7LNR-9.625-13.375-18.625",
+    "company_name": null, "company_logo": null,
+    "wellhead_damage": true, "well_name": "SAMPLE_1_0",
+    "xml": "schematic.xml"
+  },
+  "scenarios": [
+    {"name": "auto_damage",           "damage_count": 3, "include_disclaimer": false},
+    {"name": "no_damage",             "damage_count": 0, "include_disclaimer": false},
+    {"name": "with_disclaimer",       "damage_count": 3, "include_disclaimer": true}
+  ]
+}
