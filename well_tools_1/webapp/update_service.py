@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,25 @@ MANIFEST_URL = "https://raw.githubusercontent.com/AbdullahTamer27/Talos-releases
 RELEASE_BASE = "https://github.com/AbdullahTamer27/Talos-releases/releases/download"
 _CACHE_PATH = os.path.join(DATA_DIR, "manifest_cache.json")
 _TIMEOUT = 6
+
+
+def _make_ssl_context():
+    """Verify TLS against certifi's CA bundle instead of the OS cert store.
+
+    The frozen Windows exe has no reliable system CA store to fall back on: the
+    manifest host may already be cached by Windows, but GitHub redirects release
+    downloads to a CDN whose intermediate CA isn't pre-installed, which surfaces
+    as ``CERTIFICATE_VERIFY_FAILED``. Shipping certifi and pointing OpenSSL
+    straight at it makes verification self-contained on every machine. Falls
+    back to the stdlib default in dev if certifi isn't installed."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        return ssl.create_default_context()
+
+
+_SSL_CTX = _make_ssl_context()
 
 
 # --- identity + version -----------------------------------------------------
@@ -77,7 +97,7 @@ def fetch_manifest():
     """Return ``(manifest, online)``. On a network failure, fall back to the last
     cached manifest so a previously-seen kill still applies offline."""
     try:
-        with urlopen(MANIFEST_URL, timeout=_TIMEOUT) as r:
+        with urlopen(MANIFEST_URL, timeout=_TIMEOUT, context=_SSL_CTX) as r:
             data = json.loads(r.read().decode("utf-8"))
         _write_cache(data)
         return data, True
@@ -164,7 +184,7 @@ def apply_update():
 
 def _download(url, dest):
     try:
-        with urlopen(url, timeout=60) as r, open(dest, "wb") as f:
+        with urlopen(url, timeout=60, context=_SSL_CTX) as r, open(dest, "wb") as f:
             while True:
                 chunk = r.read(1 << 20)
                 if not chunk:
@@ -175,7 +195,7 @@ def _download(url, dest):
 
 
 def _fetch_text(url):
-    with urlopen(url, timeout=_TIMEOUT) as r:
+    with urlopen(url, timeout=_TIMEOUT, context=_SSL_CTX) as r:
         return r.read().decode("utf-8")
 
 
