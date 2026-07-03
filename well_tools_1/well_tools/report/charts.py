@@ -141,16 +141,23 @@ def render_pie(pipe, counts, out_path):
     if total > 0:
         slice_idx = [i for i, v in enumerate(values) if v > 0]
         slice_pcts = [pcts[i] for i in slice_idx]
-        wedge_pcts = iter(slice_pcts)
         wedges, _texts, autotexts = ax_pie.pie(
             [values[i] for i in slice_idx],
             colors=[_hex(GRADES[i]) for i in slice_idx],
             startangle=90, counterclock=False,
-            autopct=lambda _frac: f"{next(wedge_pcts)}%",
+            autopct="%d",   # placeholder — real whole-number labels set just below
             pctdistance=0.7,
             textprops={"fontfamily": "Calibri", "fontsize": 7},
             wedgeprops={"edgecolor": "white", "linewidth": 0.5},
         )
+        # Set each wedge's whole-number percentage explicitly, AFTER pie(). The
+        # previous approach pulled labels from an iterator inside the autopct
+        # callback, which assumes matplotlib calls it exactly once per wedge, in
+        # order — that assumption changed across matplotlib versions and rendered
+        # the labels blank in the frozen (CI-built) exe. Setting the text objects
+        # directly is version-robust.
+        for at, p in zip(autotexts, slice_pcts):
+            at.set_text(f"{p}%")
         # Slices too thin to hold their label get one floated just outside the
         # ring (matches the sample, where 1–2% labels sit above the pie). When
         # several thin slices are adjacent (e.g. C=2% beside D=1%) their mid-

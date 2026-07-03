@@ -20,4 +20,8 @@ python-docx
 openpyxl
 pandas
 lxml
-matplotlib
+# matplotlib + numpy are PINNED: the CI-built exe must render the pie charts
+# identically to the dev machine. An unpinned matplotlib pulled a version whose
+# pie-label behaviour differed and rendered the chart numbers blank in the exe.
+matplotlib==3.11.0
+numpy==2.4.6
