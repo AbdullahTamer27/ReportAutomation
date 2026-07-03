@@ -16,13 +16,14 @@
   --text-dim: #aab4c5;
   --muted: #8a95a8;            /* nudged lighter for WCAG-AA on small text */
 
-  /* accent — indigo/violet (primary: your focus & interaction) */
+  /* indigo/violet — ambient only: page background glow + decorative shades.
+     (No longer used for interaction; bronze leads every interactive accent.) */
   --accent: #7c8cff;
   --accent-2: #a974ff;
   --accent-grad: linear-gradient(135deg, #6f7dff 0%, #a06bff 100%);
   --accent-glow: rgba(124, 140, 255, 0.45);
 
-  /* accent — bronze (secondary: Talos, the automaton — auto-filled & brand) */
+  /* bronze — the primary accent: buttons, focus, links, hovers, brand & auto-fill. */
   --bronze: #c98a3b;
   --bronze-2: #e0a55a;
   --bronze-grad: linear-gradient(135deg, #c07f31 0%, #e0a55a 100%);

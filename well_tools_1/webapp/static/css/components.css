@@ -6,13 +6,13 @@
 .link-back {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--bronze-2);
   padding: 0 0 10px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
-.link-back:hover { color: var(--accent-2); }
+.link-back:hover { color: var(--bronze); }
 
 /* ===== Fields ===== */
 .field {
@@ -56,8 +56,8 @@ select option { background: #0e1422; color: var(--text); }
 
 select:focus, .text-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--bronze);
+  box-shadow: 0 0 0 3px var(--bronze-glow);
 }
 .text-input::placeholder { color: var(--muted); }
 
@@ -100,7 +100,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.5; cursor: default; }
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--bronze-glow);
 }
 
 .secondary {
@@ -110,7 +110,7 @@ button:focus-visible {
 }
 .secondary:hover:not(:disabled) {
   background: #222c40;
-  border-color: var(--accent);
+  border-color: var(--bronze);
 }
 
 .primary {
@@ -118,12 +118,12 @@ button:focus-visible {
   padding: 13px;
   margin-top: 8px;
   font-size: 15px;
-  color: #fff;
-  background: var(--accent-grad);
-  box-shadow: 0 10px 26px -12px var(--accent-glow);
+  color: #1c1206;                 /* dark ink reads better on bronze than white */
+  background: var(--bronze-grad);
+  box-shadow: 0 10px 26px -12px var(--bronze-glow);
 }
 .primary:hover:not(:disabled) {
-  box-shadow: 0 14px 32px -10px var(--accent-glow);
+  box-shadow: 0 14px 32px -10px var(--bronze-glow);
   filter: brightness(1.06);
 }
 
@@ -227,6 +227,7 @@ button:focus-visible {
   font-weight: 600;
   line-height: 1.45;
 }
+#previewResult { flex: 0 0 auto; }   /* notes keep their height; the body scrolls, not this */
 #previewResult .status { margin-top: 0; }
 #previewResult:not(:empty) { margin-bottom: 16px; }
 
@@ -330,7 +331,7 @@ button:focus-visible {
 .checkbox-row input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--bronze);
   cursor: pointer;
 }
 

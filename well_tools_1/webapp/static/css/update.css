@@ -44,14 +44,14 @@
   border-radius: var(--radius-sm);
   font-weight: 600;
 }
-.primary-sm { color: #fff; background: var(--accent-grad); border: 1px solid transparent; }
+.primary-sm { color: #1c1206; background: var(--bronze-grad); border: 1px solid transparent; }
 .primary-sm:hover:not(:disabled) { filter: brightness(1.06); }
 .secondary-sm {
   color: var(--text-dim);
   background: transparent;
   border: 1px solid var(--border-strong);
 }
-.secondary-sm:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.secondary-sm:hover:not(:disabled) { border-color: var(--bronze); color: var(--text); }
 
 /* Required + blocked: a full-screen backdrop with a centered card. */
 .update-overlay {

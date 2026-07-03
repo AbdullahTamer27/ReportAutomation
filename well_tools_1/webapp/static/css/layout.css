@@ -75,7 +75,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(420px 160px at 50% -40%, rgba(124, 140, 255, 0.18), transparent 70%);
+  background: radial-gradient(420px 160px at 50% -40%, rgba(224, 165, 90, 0.16), transparent 70%);
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
@@ -95,15 +95,15 @@
 #modeGhost.mode-card::before { content: "👻"; }
 
 .mode-card:hover {
-  border-color: var(--accent);
+  border-color: var(--bronze);
   transform: translateY(-3px);
-  box-shadow: 0 22px 50px -22px rgba(124, 140, 255, 0.5);
+  box-shadow: 0 22px 50px -22px rgba(201, 138, 59, 0.45);
 }
 .mode-card:hover::after { opacity: 1; }
 .mode-card:focus-visible {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--bronze);
+  box-shadow: 0 0 0 3px var(--bronze-glow);
 }
 
 .mode-title { font-size: 18px; font-weight: 650; color: var(--text); }
@@ -142,6 +142,8 @@
 }
 .preview-header h2 { margin: 0; font-size: 16px; }
 .preview-body {
+  flex: 1 1 auto;      /* take the space left by the header + notes… */
+  min-height: 0;       /* …and allow shrinking so the pages scroll internally */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -151,6 +153,7 @@
 .preview-page {
   width: 100%;
   height: auto;
+  flex: 0 0 auto;      /* keep natural page height; the body scrolls, pages don't squish */
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.8);

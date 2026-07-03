@@ -47,6 +47,7 @@ h1[tabindex="-1"], h2[tabindex="-1"] { outline: none; }
   z-index: 10;
   text-align: center;
   padding: 12px 16px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--muted);
   background: linear-gradient(180deg, rgba(10, 14, 22, 0), rgba(10, 14, 22, 0.92) 45%);
