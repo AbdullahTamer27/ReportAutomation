@@ -12,6 +12,7 @@ import {
 import { generate } from "./generate.js";
 import { tmPickFile, tmRegister, cmPickFile, cmRegister } from "./managers.js";
 import { pickGhostCsv, ghostMerge } from "./ghost.js";
+import { checkForUpdates } from "./updater.js";
 
 // --- Mode selection + navigation --------------------------------------------
 els.modeReport.addEventListener("click", () => {
@@ -64,3 +65,4 @@ for (const elId of Object.values(SCHEMATIC_FIELDS)) {
 
 // --- Boot -------------------------------------------------------------------
 showView("mode");
+checkForUpdates();   // non-blocking: banner / required modal / blocked screen

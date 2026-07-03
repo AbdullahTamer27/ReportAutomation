@@ -282,6 +282,30 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/update/check")
+def update_check():
+    """Launch decision from the control manifest (update / required / blocked)."""
+    from . import update_service
+    return update_service.check()
+
+
+@app.post("/api/update/apply")
+def update_apply():
+    """Download + verify + swap-restart to the latest build (packaged app only).
+
+    On success in the packaged build the process exits to let the helper swap the
+    exe, so this call won't return; any error is surfaced to the UI."""
+    from . import update_service
+    try:
+        update_service.apply_update()
+        return {"ok": True}
+    except update_service.UpdateError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Update apply failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/interval/generate", response_model=IntervalResponse)
 def interval_generate(req: IntervalRequest):
     """Interval Generator: parse the XML and update the template's 'Raw Data'
