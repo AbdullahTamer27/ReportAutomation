@@ -35,10 +35,10 @@ def _ensure_std_streams():
         return
     try:
         log_dir = os.path.join(
-            os.environ.get("APPDATA") or os.path.expanduser("~"), "WellTools"
+            os.environ.get("APPDATA") or os.path.expanduser("~"), "Talos"
         )
         os.makedirs(log_dir, exist_ok=True)
-        stream = open(os.path.join(log_dir, "welltools.log"), "a",
+        stream = open(os.path.join(log_dir, "talos.log"), "a",
                       buffering=1, encoding="utf-8", errors="replace")
     except OSError:
         stream = open(os.devnull, "w")
@@ -135,7 +135,7 @@ def main():
 
     api = Api()
     window = webview.create_window(
-        "Report Automation",
+        "Talos",
         url=f"http://127.0.0.1:{port}/",
         js_api=api,
         width=1180,

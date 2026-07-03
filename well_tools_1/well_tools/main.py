@@ -1,4 +1,4 @@
-"""Well Tools — entry point.
+"""Talos — entry point.
 
 Two tabs:
   1. Interval Generator  (existing tool, unchanged behavior)
@@ -16,7 +16,7 @@ from .ui.report_tab import ReportTab
 
 def main():
     root, dnd_enabled = make_root()
-    root.title("Well Tools")
+    root.title("Talos")
     root.geometry("820x780")
 
     notebook = ttk.Notebook(root)

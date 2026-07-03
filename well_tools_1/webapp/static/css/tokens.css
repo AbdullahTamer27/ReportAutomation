@@ -1,0 +1,48 @@
+/* ============================================================
+   Talos — design tokens (single source of truth for the theme)
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --bg: #0a0e16;
+  --surface: #121826;
+  --surface-2: #161d2e;
+  --elevated: #1b2334;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* text */
+  --text: #e7ecf3;
+  --text-dim: #aab4c5;
+  --muted: #8a95a8;            /* nudged lighter for WCAG-AA on small text */
+
+  /* accent — indigo/violet (primary: your focus & interaction) */
+  --accent: #7c8cff;
+  --accent-2: #a974ff;
+  --accent-grad: linear-gradient(135deg, #6f7dff 0%, #a06bff 100%);
+  --accent-glow: rgba(124, 140, 255, 0.45);
+
+  /* accent — bronze (secondary: Talos, the automaton — auto-filled & brand) */
+  --bronze: #c98a3b;
+  --bronze-2: #e0a55a;
+  --bronze-grad: linear-gradient(135deg, #c07f31 0%, #e0a55a 100%);
+  --bronze-glow: rgba(201, 138, 59, 0.30);
+
+  /* semantic */
+  --success-fg: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.12);
+  --success-bd: rgba(74, 222, 128, 0.30);
+  --error-fg: #fb7185;
+  --error-bg: rgba(251, 113, 133, 0.12);
+  --error-bd: rgba(251, 113, 133, 0.30);
+  --info-fg: #7cc0ff;
+  --info-bg: rgba(124, 192, 255, 0.10);
+  --info-bd: rgba(124, 192, 255, 0.28);
+  --warn-fg: #fbbf24;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+
+  /* layout */
+  --topbar-h: 52px;
+}

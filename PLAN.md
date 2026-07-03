@@ -18,7 +18,7 @@ so they don't conflict on `main`.
    [B3](#phase-b3--release-channel-decision).
 3. **Fixtures:** synthesized set committed; real set is **local-only** (git-ignored,
    too large + machine-specific) in `well_tools_1/tests/fixtures/real/`.
-4. **Install location:** `%APPDATA%\WellTools` (user-writable → updates need no admin).
+4. **Install location:** `%APPDATA%\Talos` (user-writable → updates need no admin).
 5. **Update policy:** optional, user-dismissable — **unless** the maintainer marks a
    release *required*. Enforced via a control manifest ([B4a](#phase-b4a--control-manifest-kill-switches)).
 6. **Kill switches:** both **universal** (version floor) and **targeted** (per-user),
@@ -102,7 +102,7 @@ switches) and provable authorship baked into every release.
 ### Phase B2 — Release build pipeline (`release.yml`)
 - Triggers on `v*` tags; runs on `windows-latest`.
 - **Gates on the test job passing.**
-- Runs PyInstaller (the `build_webapp.bat` path) → `WellTools.exe`.
+- Runs PyInstaller (the `build_webapp.bat` path) → `Talos.exe`.
 - **Build provenance:** stamp the exe (PyInstaller version-info) and the release
   notes with the **commit SHA** + version, so every binary traces to a signed
   commit in the private repo.
@@ -110,7 +110,7 @@ switches) and provable authorship baked into every release.
 - Publishes to the public releases repo: the exe + a `SHA256` checksum + notes.
 
 ### Phase B3 — Release-channel decision
-- **Chosen: a public "releases" repo** (e.g. `WellTools-releases`). Binaries are
+- **Chosen: a public "releases" repo** (e.g. `Talos-releases`). Binaries are
   published there; the app reads that repo's public API. Source stays private. The
   publish token lives only in CI secrets — never in the shipped exe.
 
@@ -146,7 +146,7 @@ maintainer controls from one place:
 
 ### Phase B5 — Swap-and-restart
 - Download the new exe to temp → small helper waits for exit, swaps files, relaunches.
-- App lives in `%APPDATA%\WellTools` (user-writable) → no admin prompt.
+- App lives in `%APPDATA%\Talos` (user-writable) → no admin prompt.
 
 ### Phase B6 — Code signing *(in scope)*
 - **Self-signed** cert; sign the exe in `release.yml` (`signtool`, cert from a CI

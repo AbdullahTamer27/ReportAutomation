@@ -1,10 +1,10 @@
-# WellTools.spec
-# PyInstaller spec — one-dir build for the Well Tools desktop web app.
+# Talos.spec
+# PyInstaller spec — one-dir build for the Talos desktop web app.
 #
 # Run from the well_tools_1/ directory (where this file lives):
-#   pyinstaller --clean --noconfirm WellTools.spec
+#   pyinstaller --clean --noconfirm Talos.spec
 #
-# Output: dist/WellTools/WellTools.exe  (+ _internal/ with all dependencies)
+# Output: dist/Talos/Talos.exe  (+ _internal/ with all dependencies)
 
 import os
 import sys
@@ -110,7 +110,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,            # onefile: bundle static frontend + templates into the EXE
     [],
-    name="WellTools",
+    name="Talos",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -120,7 +120,7 @@ exe = EXE(
     icon=None,            # swap in an .ico path to brand the EXE
 )
 
-# NOTE: one-file build. Output is a single dist/WellTools.exe.
+# NOTE: one-file build. Output is a single dist/Talos.exe.
 # (Previous one-dir COLLECT removed.) The exe still requires the Edge WebView2
 # runtime (UI) and Microsoft Word (PDF preview) on the target machine — those
 # are external apps and cannot be embedded into the executable.

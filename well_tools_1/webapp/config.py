@@ -9,7 +9,7 @@ one-file mode):
     to ``sys._MEIPASS`` — a TEMP folder that is wiped when the app exits.
   * Writable data (the SQLite DB, the PDF-preview cache, and any templates the
     user adds via the Template Manager) must live somewhere permanent, or it is
-    lost every time the app closes. We use ``%APPDATA%\\WellTools`` on Windows.
+    lost every time the app closes. We use ``%APPDATA%\\Talos`` on Windows.
 
 In dev (not frozen) both roots collapse back to ``webapp/data/`` as before, so
 nothing about the development workflow changes.
@@ -24,11 +24,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _FROZEN = getattr(sys, "frozen", False)
 
 if _FROZEN:
-    # Read-only resources bundled into the EXE (see datas= in WellTools.spec).
+    # Read-only resources bundled into the EXE (see datas= in Talos.spec).
     BUNDLE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
     # Writable, persistent app data — survives across runs and rebuilds.
     _APP_HOME = os.environ.get("APPDATA") or os.path.expanduser("~")
-    DATA_DIR = os.path.join(_APP_HOME, "WellTools")
+    DATA_DIR = os.path.join(_APP_HOME, "Talos")
 else:
     BUNDLE_DIR = HERE
     DATA_DIR = os.path.join(HERE, "data")

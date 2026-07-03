@@ -1,11 +1,11 @@
 @echo off
 REM ============================================================
-REM  Build WellTools web-app desktop EXE
+REM  Build Talos web-app desktop EXE
 REM  Run from the well_tools_1\ folder with your conda env active
 REM ============================================================
 
 echo.
-echo === Well Tools — EXE build ===
+echo === Talos — EXE build ===
 echo.
 
 echo [1/3] Installing / verifying build dependencies...
@@ -19,14 +19,14 @@ python -m pywin32_postinstall -install 2>nul
 echo.
 
 echo [3/3] Building with PyInstaller...
-pyinstaller --clean --noconfirm WellTools.spec
+pyinstaller --clean --noconfirm Talos.spec
 echo.
 
-if exist dist\WellTools\WellTools.exe (
+if exist dist\Talos\Talos.exe (
     echo ============================================================
     echo  BUILD SUCCEEDED
-    echo  EXE:  dist\WellTools\WellTools.exe
-    echo  Distribute the entire dist\WellTools\ folder.
+    echo  EXE:  dist\Talos\Talos.exe
+    echo  Distribute the entire dist\Talos\ folder.
     echo ============================================================
 ) else (
     echo ============================================================

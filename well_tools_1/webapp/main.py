@@ -265,7 +265,7 @@ def index():
 def _startup():
     """Create tables and seed the registry from the manifest."""
     # On a frozen build, copy bundled templates into the persistent data dir
-    # (%APPDATA%\WellTools) on first run before anything reads the manifest.
+    # (%APPDATA%\Talos) on first run before anything reads the manifest.
     ensure_user_data()
     init_db()
     db = SessionLocal()
