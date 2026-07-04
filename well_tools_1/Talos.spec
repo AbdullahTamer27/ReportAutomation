@@ -122,7 +122,7 @@ exe = EXE(
     upx=False,            # UPX can trigger antivirus false-positives; keep off
     runtime_tmpdir=None,  # unpack to the OS temp dir at launch
     console=False,        # no terminal window — change to True to see server logs
-    icon=None,            # swap in an .ico path to brand the EXE
+    icon="talos.ico",     # Talos sentinel-helm mark (built from static/img/talos-icon.svg)
 )
 
 # NOTE: one-file build. Output is a single dist/Talos.exe.

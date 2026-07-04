@@ -19,24 +19,12 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Bronze automaton mark — a small forged diamond. */
+/* Talos sentinel-helm mark (bronze Corinthian helm with a dark visor). */
 .brand-mark {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
-  transform: rotate(45deg);
-  border-radius: 5px;
-  background: var(--bronze-grad);
-  box-shadow: 0 0 0 1px rgba(224, 165, 90, 0.35), 0 4px 12px -4px var(--bronze-glow);
-  position: relative;
-}
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  border-radius: 2px;
-  background: var(--bg);
-  opacity: 0.55;
+  background: url("/static/img/talos-mark.svg") center / contain no-repeat;
 }
 
 .brand-name {

@@ -76,7 +76,7 @@
   padding: 30px 30px 26px;
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.85);
 }
-.update-card .brand-mark { margin: 0 auto 14px; display: block; }
+.update-card .brand-mark { width: 44px; height: 44px; margin: 0 auto 14px; display: block; }
 .update-card h2 { margin: 0 0 10px; font-size: 20px; }
 .update-card p { margin: 0 0 10px; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
 .update-card .update-msg {
