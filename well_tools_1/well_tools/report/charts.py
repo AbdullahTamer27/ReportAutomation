@@ -36,6 +36,14 @@ from matplotlib.patches import Patch
 # the Windows target but not every dev box; the fallback renders fine.
 logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
+# Force matplotlib's bundled DejaVu Sans as the global default. Requesting the
+# Windows system fonts (Calibri/Tahoma) is what broke the frozen exe: there they
+# resolve to font files the PyInstaller build can't rasterize, so the wedge %
+# labels and table numbers rendered blank (title/legend survived only because
+# they happened to fall back). DejaVu ships inside matplotlib, so it renders
+# identically on every machine — dev already used it via fallback.
+matplotlib.rcParams["font.family"] = "DejaVu Sans"
+
 from .tables import (
     GRADE_COLORS, MAX_LOSS_IDX, grade_for_loss, is_excluded, read_joints,
 )
@@ -49,9 +57,10 @@ _PIE_PLACEHOLDER = re.compile(r"^\{\{pie_\w+\}\}$")
 # Header band of the small table — matches the original report's pie table.
 _HEADER_BLUE = "#0070C0"
 
-# Title font — Calibri (body) to match the document; matplotlib falls back to
-# its default sans-serif if Calibri isn't installed (e.g. on a non-Windows box).
-_TITLE_FONT = "Calibri"
+# All chart text uses the bundled DejaVu Sans (see rcParams note above) so it
+# renders reliably in the frozen exe. `_FONT` is the single knob for the family.
+_FONT = "DejaVu Sans"
+_TITLE_FONT = _FONT
 _TITLE_SIZE = 15
 
 # Final image size, in inches — fixed so every pie drops into its placeholder
@@ -147,7 +156,7 @@ def render_pie(pipe, counts, out_path):
             startangle=90, counterclock=False,
             autopct="%d",   # placeholder — real whole-number labels set just below
             pctdistance=0.7,
-            textprops={"fontfamily": "Calibri", "fontsize": 7},
+            textprops={"fontfamily": _FONT, "fontsize": 7},
             wedgeprops={"edgecolor": "white", "linewidth": 0.5},
         )
         # Set each wedge's whole-number percentage explicitly, AFTER pie(). The
@@ -210,27 +219,27 @@ def render_pie(pipe, counts, out_path):
     # Give every row an explicit height in axes-fraction units so the table
     # exactly fills its band (no overflow that would clip the Total row). The
     # header counts as two units, making it twice as tall as a normal row.
-    # Fonts: header Calibri 9 bold; grade letters and the 'Total' label Tahoma 8
-    # bold; all other data cells (incl. the Total's count + %) Calibri 8.
+    # Fonts (all DejaVu Sans — see _FONT): header 9 bold; grade letters and the
+    # 'Total' label 8 bold; all other data cells (incl. Total's count + %) 8.
     n_rows = len(cell_text)
     unit = 1.0 / (n_rows + 1)            # +1 because the header is double height
     for (r, c), cell in table.get_celld().items():
         cell.set_edgecolor("#BFBFBF")
         cell.set_height(2 * unit if r == 0 else unit)
-        if r == 0:                                   # header — Calibri 9 bold
-            cell.set_text_props(fontfamily="Calibri", fontsize=9,
+        if r == 0:                                   # header — 9 bold
+            cell.set_text_props(fontfamily=_FONT, fontsize=9,
                                 fontweight="bold", color="white")
         elif r == n_rows - 1:                        # Total row
-            if c == 0:                               # 'Total' label — Tahoma 8 bold
-                cell.set_text_props(fontfamily="Tahoma", fontsize=8,
+            if c == 0:                               # 'Total' label — 8 bold
+                cell.set_text_props(fontfamily=_FONT, fontsize=8,
                                     fontweight="bold")
             else:                                    # count + % — like the data cells
-                cell.set_text_props(fontfamily="Calibri", fontsize=8)
-        elif c == 0:                                 # grade letter — Tahoma 8 bold
-            cell.set_text_props(fontfamily="Tahoma", fontsize=8,
+                cell.set_text_props(fontfamily=_FONT, fontsize=8)
+        elif c == 0:                                 # grade letter — 8 bold
+            cell.set_text_props(fontfamily=_FONT, fontsize=8,
                                 fontweight="bold")
-        else:                                        # data — Calibri 8
-            cell.set_text_props(fontfamily="Calibri", fontsize=8)
+        else:                                        # data — 8
+            cell.set_text_props(fontfamily=_FONT, fontsize=8)
 
     # Save at the exact figure size (no tight crop) so the image is precisely
     # _IMG_W_IN x _IMG_H_IN; the axes layout already removes side padding.
@@ -257,6 +266,15 @@ def place_pie_charts(output_path, pipe_model, excel_path, progress=None, review=
     from docx import Document
     from . import _wbcache
     from .images import place_images_by_alttext, remove_unfilled_alttext_placeholders
+
+    # One-time provenance line: which font file the chart text actually resolves
+    # to. If a frozen build ever renders labels blank again, this tells us at a
+    # glance whether the font resolved (problem elsewhere) or not (font problem).
+    try:
+        from matplotlib.font_manager import findfont, FontProperties
+        log(f"Pie chart font: '{_FONT}' -> {findfont(FontProperties(family=_FONT))}")
+    except Exception as e:  # noqa: BLE001 — diagnostics must never break a report
+        log(f"Pie chart font: resolve check failed — {e}")
 
     wb = _wbcache.load(excel_path, data_only=True)
     sheets = set(wb.sheetnames)
