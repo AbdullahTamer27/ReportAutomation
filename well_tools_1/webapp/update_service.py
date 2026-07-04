@@ -200,16 +200,33 @@ def _fetch_text(url):
 
 
 def _spawn_swap_helper(cur_exe, new_exe):
-    """Write and launch a detached .bat that waits for THIS process to exit,
-    replaces the exe with the freshly-downloaded one, and relaunches it."""
-    pid = os.getpid()
+    """Write and launch a detached .bat that waits for the old exe to unlock,
+    replaces it with the freshly-downloaded build, and relaunches it.
+
+    Two subtleties of the frozen onefile case, both of which broke the earlier
+    version (download succeeded but the swap/relaunch didn't happen):
+
+      * The PyInstaller bootloader keeps ``cur_exe`` locked until it fully exits
+        — a beat *after* our ``os._exit(0)``. So we RETRY the move until the lock
+        clears rather than assuming the file is free the moment our PID is gone.
+      * ``timeout`` fails in a console-less detached process ("Input redirection
+        is not supported") and returns instantly, so we sleep with ``ping``.
+    """
     bat = os.path.join(tempfile.gettempdir(), "talos_update.bat")
     script = (
         "@echo off\r\n"
-        ":wait\r\n"
-        f'tasklist /fi "PID eq {pid}" | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n'
-        f'move /y "{new_exe}" "{cur_exe}" >nul\r\n'
+        "setlocal\r\n"
+        "set /a tries=0\r\n"
+        ":swap\r\n"
+        # Succeeds only once every handle to the old exe is released.
+        f'move /y "{new_exe}" "{cur_exe}" >nul 2>&1 && goto launch\r\n'
+        "set /a tries+=1\r\n"
+        "if %tries% geq 60 goto done\r\n"      # ~60s ceiling, then give up cleanly
+        "ping -n 2 127.0.0.1 >nul\r\n"         # ~1s sleep that works without a console
+        "goto swap\r\n"
+        ":launch\r\n"
         f'start "" "{cur_exe}"\r\n'
+        ":done\r\n"
         'del "%~f0"\r\n'
     )
     with open(bat, "w", encoding="utf-8") as f:
