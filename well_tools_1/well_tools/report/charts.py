@@ -61,7 +61,7 @@ _HEADER_BLUE = "#0070C0"
 # renders reliably in the frozen exe. `_FONT` is the single knob for the family.
 _FONT = "DejaVu Sans"
 _TITLE_FONT = _FONT
-_TITLE_SIZE = 15
+_TITLE_SIZE = 14
 
 # Final image size, in inches — fixed so every pie drops into its placeholder
 # at the same dimensions (the table stretches to this full width; the circle is
