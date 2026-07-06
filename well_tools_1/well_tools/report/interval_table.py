@@ -12,8 +12,9 @@ interval table.
 The interval data is the SAME table the RawData workbook is built from
 (``build_intervals_from_xml``), so the report and the Excel can never disagree.
 Two deliberate rules (per the report owner):
-  * "Pipe channel response" is left blank — that first-response channel has no
-    data source yet;
+  * "Pipe channel response" (the first-response channels) is filled from a
+    ``Channels`` sheet in the data workbook when present — one already-formatted
+    string per interval, interval 1 at the top — and left blank otherwise;
   * values are written as computed — anomalies (e.g. an undetected boundary) are
     left for the user to edit rather than second-guessed here.
 """
@@ -28,6 +29,15 @@ from .tables import set_cell_text
 
 INTERVALS_TAG = "{{INTERVALS}}"
 PER_BLOCK = 3   # intervals shown per block (data columns 1..3)
+
+# First-response channels feed the "Pipe channel response" row. When the data
+# workbook has a sheet named `Channels`, each interval's value is read as an
+# already-formatted string (e.g. "10-20-30-40") from a single column, one row per
+# interval, interval 1 at START_ROW (matching the interval numbering: shallowest
+# first). The column is a PLACEHOLDER until confirmed — change it in one place.
+FIRST_RESPONSE_SHEET = "Channels"
+FIRST_RESPONSE_COL = "AA"        # TODO: confirm the real column, then update here
+FIRST_RESPONSE_START_ROW = 1     # row holding interval 1 (bump to 2 if there's a header)
 
 # Column-0 labels, in block order. "Tubular size & weight" repeats — one row per
 # pipe. "Pipe channel response" is written blank on purpose (see module docstring).
@@ -59,7 +69,41 @@ def build_interval_records(xml_path, excel_path=None):
         except ValueError:
             thickness_sections = None   # no/unreadable THICKNESS — channel rows stay blank
     df = build_intervals_from_xml(xml_data, thickness_sections=thickness_sections)
-    return df.to_dict("records")
+    records = df.to_dict("records")
+
+    # First-response channels (the "Pipe channel response" row), aligned to the
+    # same interval order — blank when there's no Channels sheet.
+    responses = _read_first_response(excel_path, len(records))
+    for rec, val in zip(records, responses):
+        rec["FirstResponse"] = val
+    return records
+
+
+def _read_first_response(excel_path, count):
+    """Return `count` first-response strings from the data workbook's ``Channels``
+    sheet — column ``FIRST_RESPONSE_COL``, one row per interval starting at
+    ``FIRST_RESPONSE_START_ROW`` (interval 1 at the top). Any missing sheet, row,
+    or cell yields "" for that slot, so the row simply stays blank."""
+    blanks = [""] * count
+    if not excel_path or not os.path.isfile(excel_path):
+        return blanks
+    try:
+        from openpyxl.utils import column_index_from_string
+        from . import _wbcache
+        wb = _wbcache.load(excel_path, data_only=True)
+        name = next((s for s in wb.sheetnames
+                     if s.strip().lower() == FIRST_RESPONSE_SHEET.lower()), None)
+        if not name:
+            return blanks
+        ws = wb[name]
+        col = column_index_from_string(FIRST_RESPONSE_COL)
+        out = []
+        for i in range(count):
+            v = ws.cell(row=FIRST_RESPONSE_START_ROW + i, column=col).value
+            out.append("" if v is None else str(v).strip())
+        return out
+    except Exception:  # noqa: BLE001 — the channel column is best-effort
+        return blanks
 
 
 def _fmt_depth(v):
@@ -202,7 +246,8 @@ def place_interval_table(output_path, records, well_name=None,
             _fill_row(table, tr, LBL_TUBULAR, vals, ncols)
         _fill_row(table, interp_tr, LBL_INTERP,
                   ["-".join(str(c) for c in (iv.get("Channels") or [])) for iv in chunk], ncols)
-        _fill_row(table, response_tr, LBL_RESPONSE, ["" for _ in chunk], ncols)  # blank on purpose
+        _fill_row(table, response_tr, LBL_RESPONSE,                        # from the Channels sheet, else blank
+                  [str(iv.get("FirstResponse") or "") for iv in chunk], ncols)
         _fill_row(table, offset_tr, LBL_OFFSET,
                   ["/".join(str(o) for o in (iv.get("Offsets") or [])) for iv in chunk], ncols)
 

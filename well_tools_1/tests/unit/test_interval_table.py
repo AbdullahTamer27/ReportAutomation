@@ -94,3 +94,38 @@ def test_no_interval_table_is_a_noop():
     doc = Document()
     doc.add_paragraph("no interval table here")
     assert it.place_interval_table(None, _records(), doc=doc) == 0
+
+
+def test_read_first_response(tmp_path):
+    from openpyxl import Workbook
+    from openpyxl.utils import column_index_from_string
+    wb = Workbook()
+    ws = wb.active
+    ws.title = it.FIRST_RESPONSE_SHEET                 # "Channels"
+    col = column_index_from_string(it.FIRST_RESPONSE_COL)
+    for i, v in enumerate(["10-20-30-40", "12-33-44-70", 1235]):
+        ws.cell(row=it.FIRST_RESPONSE_START_ROW + i, column=col, value=v)
+    p = str(tmp_path / "data.xlsx")
+    wb.save(p)
+    assert it._read_first_response(p, 3) == ["10-20-30-40", "12-33-44-70", "1235"]
+    assert it._read_first_response(p, 5)[3:] == ["", ""]   # more asked than present
+
+
+def test_read_first_response_absent(tmp_path):
+    from openpyxl import Workbook
+    wb = Workbook(); wb.active.title = "Other"
+    p = str(tmp_path / "d.xlsx"); wb.save(p)
+    assert it._read_first_response(p, 3) == ["", "", ""]   # no Channels sheet
+    assert it._read_first_response(None, 2) == ["", ""]     # no workbook
+
+
+def test_pipe_channel_response_filled_from_records():
+    doc, table = _prototype_doc()
+    recs = _records()
+    for r, v in zip(recs, ["10-20-30-40", "12-33-44", "12-35", "9-9-9", "7"]):
+        r["FirstResponse"] = v
+    it.place_interval_table(None, recs, well_name="W", doc=doc)
+    grid = _grid(table)
+    resp = _find(grid, "Pipe channel response")
+    assert resp[0][1:] == ["10-20-30-40", "12-33-44", "12-35"]   # block 1
+    assert resp[1][1:] == ["9-9-9", "7", ""]                      # block 2 (2 intervals)
