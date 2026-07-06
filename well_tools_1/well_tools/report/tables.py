@@ -369,7 +369,12 @@ def _fill_summary_row(row, vals, rev, suffix=None):
         set_cell_text(cells[0], suffix)                                    # pipe name
     if vals is None:
         return
-    set_cell_text(cells[1], fmt(vals[MAX_LOSS_IDX], MAX_LOSS_IDX))         # metal loss
+    # Summary table shows metal loss with a trailing "%" (the per-pipe tables,
+    # which reuse `fmt` directly, keep the bare number).
+    loss = fmt(vals[MAX_LOSS_IDX], MAX_LOSS_IDX)
+    if loss and isinstance(vals[MAX_LOSS_IDX], (int, float)):
+        loss += "%"
+    set_cell_text(cells[1], loss)                                          # metal loss
     grade = str(vals[GRADE_IDX]).strip()
     set_cell_text(cells[2], grade)                                         # grade
     if grade in GRADE_COLORS:

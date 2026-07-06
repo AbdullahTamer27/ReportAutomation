@@ -6,7 +6,7 @@ import { showView } from "./nav.js";
 import { ensureTemplates, refreshTemplateHint, refreshCompanyHint } from "./registry.js";
 import { scheduleConfigPreview } from "./config.js";
 import {
-  pickExcel, browseFolder, pickXmlReport, pickSchematic, toWorkspace,
+  openWellFolder, pickExcel, browseFolder, pickXmlReport, pickSchematic, toWorkspace,
   inputsError, SCHEMATIC_FIELDS,
 } from "./inputs.js";
 import { generate } from "./generate.js";
@@ -37,6 +37,7 @@ els.pickGhostCsv.addEventListener("click", pickGhostCsv);
 els.ghostMerge.addEventListener("click", ghostMerge);
 
 // --- Inputs view ------------------------------------------------------------
+els.openWellFolder.addEventListener("click", openWellFolder);
 els.pickExcel.addEventListener("click", pickExcel);
 els.browseFolder.addEventListener("click", browseFolder);
 els.pickXmlReport.addEventListener("click", pickXmlReport);

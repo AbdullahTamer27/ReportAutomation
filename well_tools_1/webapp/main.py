@@ -206,6 +206,20 @@ class SchematicResponse(BaseModel):
     warnings: list[str]
 
 
+class WellFolderRequest(BaseModel):
+    folder_path: str = Field(..., description="Absolute path to a single well's folder")
+
+
+class WellFolderResponse(BaseModel):
+    working_dir: str
+    excel_path: str | None = None
+    xml_path: str | None = None
+    schematic_pdf: str | None = None
+    imgs_dir: str | None = None
+    found: list[str] = []
+    missing: list[str] = []
+
+
 class IntervalRequest(BaseModel):
     xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml file")
     template_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm template to update in place")
@@ -416,6 +430,30 @@ def schematic_parse(req: SchematicRequest):
             "No recognizable fields found — is this a standard Well Cross Section Plot PDF?"
         )
     return SchematicResponse(**result)
+
+
+@app.post("/api/well-folder/scan", response_model=WellFolderResponse)
+def well_folder_scan(req: WellFolderRequest):
+    """Discover a well's inputs from a single folder pick: the .xlsm/.xlsx data
+    workbook, the WellSchematic .xml, the schematic .pdf, and the IMGS/ image
+    folder — so the user chooses one folder instead of four files. Read-only.
+
+    The generated ``*_RawData.xlsx`` is excluded so it's never mistaken for the
+    source workbook. When several candidates match, the first alphabetically wins
+    (PDFs prefer a name hinting at a cross-section plot); anything not found is
+    reported in ``missing`` for the user to set manually."""
+    folder = req.folder_path
+    if not folder or not os.path.isdir(folder):
+        raise HTTPException(status_code=400, detail="Folder not found at that path.")
+    try:
+        from .discovery import scan_well_folder
+        result = scan_well_folder(folder)
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"Cannot read the folder: {e}")
+
+    logger.info("Well-folder scan | %s | found=%s missing=%s",
+                folder, result["found"], result["missing"])
+    return WellFolderResponse(**result)
 
 
 @app.post("/api/ghost/merge", response_model=GhostResponse)

@@ -17,7 +17,7 @@ from datetime import datetime
 
 from well_tools.report.report_builder import build_automation_report  # noqa: F401
 from well_tools.report.pipe_config import (
-    build_pipe_model, ConfigParseError, sizes_list_string,  # noqa: F401
+    build_pipe_model, ConfigParseError, sizes_list_string, pipe_config_phrase,  # noqa: F401
 )
 
 from .naming import normalize_date, safe_filename, report_filename
@@ -82,6 +82,9 @@ def generate(*, template_path, company_name, company_logo_path,
         "{{last_wko}}": _opt_date(last_wko, "Last workover"),
         # Delivery date = today's date, formatted like the other dates. Auto-filled.
         "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
+        # Damage present ⇒ " and Hotspots" (place the tag right after the word,
+        # e.g. "Metal Loss{{hotspot}}"); no damage ⇒ nothing.
+        "{{hotspot}}": " and Hotspots" if damage_count else "",
     }
     if defaulted:
         notes.append(
@@ -111,6 +114,9 @@ def generate(*, template_path, company_name, company_logo_path,
         for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
             text_fields[tag] = sizes_list_string(pipe_model, code)
             text_fields_quiet.add(tag)
+        # Natural-language list of pipe types present, e.g. "tubing, liner and casing".
+        text_fields["{{pipe_config}}"] = pipe_config_phrase(pipe_model)
+        text_fields_quiet.add("{{pipe_config}}")
 
     # Damage-section overlays: the picture clusters (worst C/D per pipe per
     # interval), enriched with severity + THICKNESS channel. Needs the XML.
@@ -123,6 +129,18 @@ def generate(*, template_path, company_name, company_logo_path,
         except Exception as e:  # noqa: BLE001 — overlays are best-effort
             log(f"Damage-cluster computation failed: {e}")
             notes.append(f"⚠ Damage overlays skipped — {e}")
+
+    # Interval table (the {{INTERVALS}} block): compute the same interval rows the
+    # RawData workbook is built from, so the in-report table matches the Excel.
+    # Best-effort; templates without the tag ignore it.
+    interval_records = None
+    if xml_path and os.path.isfile(xml_path):
+        try:
+            from well_tools.report.interval_table import build_interval_records
+            interval_records = build_interval_records(xml_path, excel_path)
+        except Exception as e:  # noqa: BLE001 — non-fatal, table just stays empty
+            log(f"Interval-table data failed: {e}")
+            notes.append(f"⚠ Interval table skipped — {e}")
 
     # Fold in the Interval Generator: build the Raw Data table from the XML into a
     # SEPARATE workbook beside the report — the data Excel is never opened for
@@ -160,6 +178,7 @@ def generate(*, template_path, company_name, company_logo_path,
         text_fields_quiet=text_fields_quiet,
         wellhead_damage=wellhead_damage,
         damage_clusters=damage_clusters,
+        interval_records=interval_records,
         single_doc_io=True,   # open the Word file once, save once (verified identical)
         progress=log,
         review=on_review,

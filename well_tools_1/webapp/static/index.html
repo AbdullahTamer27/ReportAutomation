@@ -157,8 +157,15 @@
         <header>
           <button type="button" class="link-back" data-nav="mode">← Back</button>
           <h1>Report Automation</h1>
-          <p class="subtitle">Provide your Excel data and the working directory.</p>
+          <p class="subtitle">Open the well's folder — or set each input manually.</p>
         </header>
+
+        <section class="field">
+          <button id="openWellFolder" type="button" class="primary">Open well folder…</button>
+          <p id="wellFolderHint" class="hint">Pick the well's folder once — Talos finds the Excel, XML, schematic PDF, and IMGS/ inside and fills the fields for you.</p>
+        </section>
+
+        <p class="section-label">Or set manually</p>
 
         <section class="field">
           <label>Excel data file</label>

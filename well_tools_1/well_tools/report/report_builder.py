@@ -56,7 +56,8 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                             company_name=None, text_fields=None,
                             conditional_lines=None, pipe_model=None,
                             text_fields_quiet=None, wellhead_damage=None,
-                            damage_clusters=None, single_doc_io=None):
+                            damage_clusters=None, interval_records=None,
+                            single_doc_io=None):
     """Build the report and return the output .docx path.
 
     `progress(msg)` streams verbose status; `review(msg)` streams only the
@@ -179,6 +180,14 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
                                 pipe_model=pipe_model, excel_path=excel_data_path,
                                 damage_clusters=damage_clusters,
                                 progress=log, review=review, doc=shared)
+
+    # ---- 3) Interval table ({{INTERVALS}} dynamic block) — no-ops without the tag ----
+    if interval_records:
+        log("Filling interval table…")
+        from . import interval_table
+        wname = (text_fields or {}).get("{{well_name}}")
+        interval_table.place_interval_table(output_path, interval_records, well_name=wname,
+                                            progress=log, review=review, doc=shared)
 
     # Single-doc I/O: the one and only save.
     if shared is not None:

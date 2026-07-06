@@ -99,3 +99,15 @@ def test_pipes_from_xml_taper_in_one_pipeset_stays_one_pipe(tmp_path):
     tbg = [p for p in pipes if p["type"] == "TBG"][0]
     assert sorted(tbg["sizes"], reverse=True) == [4.5, 3.5]   # both ODs, one pipe
     assert tbg["role"] == "firstPipe"
+
+
+@pytest.mark.parametrize("types, expected", [
+    (["TBG", "CSG"], "tubing and casing"),
+    (["TBG", "LNR", "CSG"], "tubing, liner and casing"),
+    (["CSG", "CSG", "CSG"], "casing"),               # de-duplicated by type
+    (["CSG", "TBG"], "tubing and casing"),           # ordered inside-out, not input order
+    (["TBG"], "tubing"),
+    ([], ""),
+])
+def test_pipe_config_phrase(types, expected):
+    assert pc.pipe_config_phrase([{"type": t} for t in types]) == expected

@@ -33,6 +33,8 @@ export const els = {
   cmStatus: $("cmStatus"),
   cmList: $("cmList"),
   // inputs
+  openWellFolder: $("openWellFolder"),
+  wellFolderHint: $("wellFolderHint"),
   pickExcel: $("pickExcel"),
   excelPath: $("excelPath"),
   workingDirInput: $("workingDirInput"),

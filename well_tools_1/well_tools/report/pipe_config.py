@@ -326,3 +326,20 @@ def sizes_list_string(pipes, type_code):
     """Comma-separated size labels for all pipes of `type_code`, largest first
     (sizes only, no type word). E.g. '18 5/8", 13 3/8", 9 5/8"'."""
     return ", ".join(_sizes_label(p["sizes"]) for p in pipes_of_type(pipes, type_code))
+
+
+def pipe_config_phrase(pipes):
+    """Natural-language list of the pipe *types* present, de-duplicated and
+    ordered inside-out (tubing, then liner, then casing).
+
+        tubing + casing              -> "tubing and casing"
+        tubing + liner + casing      -> "tubing, liner and casing"
+
+    Sizes and duplicates are ignored — three casings still read as one "casing".
+    Returns "" when there are no pipes. Used for the ``{{pipe_config}}`` tag."""
+    present = [TYPE_FULL[code].lower()
+               for code in ("TBG", "LNR", "CSG")
+               if any(p.get("type") == code for p in pipes)]
+    if len(present) <= 1:
+        return present[0] if present else ""
+    return ", ".join(present[:-1]) + " and " + present[-1]
