@@ -36,8 +36,8 @@ PER_BLOCK = 3   # intervals shown per block (data columns 1..3)
 # interval, interval 1 at START_ROW (matching the interval numbering: shallowest
 # first). The column is a PLACEHOLDER until confirmed — change it in one place.
 FIRST_RESPONSE_SHEET = "Channels"
-FIRST_RESPONSE_COL = "AA"        # TODO: confirm the real column, then update here
-FIRST_RESPONSE_START_ROW = 1     # row holding interval 1 (bump to 2 if there's a header)
+FIRST_RESPONSE_COL = "Q"         # column holding each interval's first-response string
+FIRST_RESPONSE_START_ROW = 2     # interval 1 is row 2 (row 1 is the header)
 
 # Column-0 labels, in block order. "Tubular size & weight" repeats — one row per
 # pipe. "Pipe channel response" is written blank on purpose (see module docstring).
