@@ -67,3 +67,14 @@ for (const elId of Object.values(SCHEMATIC_FIELDS)) {
 // --- Boot -------------------------------------------------------------------
 showView("mode");
 checkForUpdates();   // non-blocking: banner / required modal / blocked screen
+
+// Show the running version beside the brand name (from the local server).
+fetch("/api/health")
+  .then((r) => r.json())
+  .then((d) => {
+    if (d && d.version && els.brandVersion) {
+      els.brandVersion.textContent = `v${d.version}`;
+      els.brandVersion.hidden = false;
+    }
+  })
+  .catch(() => {});   // header just omits the version if it can't be read

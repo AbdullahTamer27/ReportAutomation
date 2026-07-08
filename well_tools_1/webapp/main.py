@@ -293,7 +293,8 @@ def _startup():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    from .update_service import current_version
+    return {"status": "ok", "version": current_version()}
 
 
 @app.get("/api/update/check")

@@ -32,6 +32,8 @@ export const els = {
   cmRegister: $("cmRegister"),
   cmStatus: $("cmStatus"),
   cmList: $("cmList"),
+  // topbar
+  brandVersion: $("brandVersion"),
   // inputs
   openWellFolder: $("openWellFolder"),
   wellFolderHint: $("wellFolderHint"),
