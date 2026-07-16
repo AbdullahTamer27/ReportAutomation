@@ -45,7 +45,7 @@ _BOTTOM_BODY_IDX = 2
 _MAX_LOSS_IDX = 7
 
 _SEGMENT = re.compile(
-    r"^\s*(\d+(?:\.\d+)?)(?:[xX×](\d+(?:\.\d+)?))?\s*(TBG|LNR|CSG)?\s*$",
+    r"^\s*(\d+(?:\.\d+)?(?:\s*[xX×]\s*\d+(?:\.\d+)?)*)\s*(TBG|LNR|CSG)?\s*$",
     re.IGNORECASE,
 )
 
@@ -100,18 +100,16 @@ def parse_config(config_str):
         m = _SEGMENT.match(seg)
         if not m:
             raise ConfigParseError(
-                f"Can't read pipe '{seg.strip()}'. Use e.g. 4.5x3.5TBG, 7LNR, or 9.625."
+                f"Can't read pipe '{seg.strip()}'. Use e.g. 4.5x3.5x2.875TBG, 7LNR, or 9.625."
             )
-        size1 = float(m.group(1))
-        size2 = float(m.group(2)) if m.group(2) else None
-        type_code = (m.group(3) or "CSG").upper()
-        sizes = [size1] + ([size2] if size2 is not None else [])
+        sizes = [float(s) for s in re.split(r"\s*[xX×]\s*", m.group(1))]
+        type_code = (m.group(2) or "CSG").upper()
         label = _sizes_label(sizes)
         pipes.append({
             "index": i + 1,
             "role": ROLE_NAMES[i],
             "sizes": sizes,
-            "tapered": size2 is not None,
+            "tapered": len(sizes) > 1,
             "type": type_code,                         # TBG / LNR / CSG
             "name": f"{label} {TYPE_FULL[type_code]}",  # full, e.g. 4 1/2" × 3 1/2" Tubing
             "suffix": f"{label} {type_code}",           # abbreviated, e.g. … TBG
@@ -326,3 +324,37 @@ def sizes_list_string(pipes, type_code):
     """Comma-separated size labels for all pipes of `type_code`, largest first
     (sizes only, no type word). E.g. '18 5/8", 13 3/8", 9 5/8"'."""
     return ", ".join(_sizes_label(p["sizes"]) for p in pipes_of_type(pipes, type_code))
+
+
+def sizes_with_label(pipes, type_code):
+    """Like :func:`sizes_list_string`, but with the type word appended, pluralised
+    by count:
+
+        3 casings -> '18 5/8", 13 3/8", 9 5/8" casing strings'
+        1 tubing  -> '4 1/2" tubing string'
+
+    Empty string when there are none of that type. Backs {{casings}} / {{liners}}
+    / {{tubings}}."""
+    matched = pipes_of_type(pipes, type_code)
+    if not matched:
+        return ""
+    sizes = ", ".join(_sizes_label(p["sizes"]) for p in matched)
+    word = TYPE_FULL[type_code].lower()                     # casing / liner / tubing
+    return f"{sizes} {word} {'string' if len(matched) == 1 else 'strings'}"
+
+
+def pipe_config_phrase(pipes):
+    """Natural-language list of the pipe *types* present, de-duplicated and
+    ordered inside-out (tubing, then liner, then casing).
+
+        tubing + casing              -> "tubing and casing"
+        tubing + liner + casing      -> "tubing, liner and casing"
+
+    Sizes and duplicates are ignored — three casings still read as one "casing".
+    Returns "" when there are no pipes. Used for the ``{{pipe_config}}`` tag."""
+    present = [TYPE_FULL[code].lower()
+               for code in ("TBG", "LNR", "CSG")
+               if any(p.get("type") == code for p in pipes)]
+    if len(present) <= 1:
+        return present[0] if present else ""
+    return ", ".join(present[:-1]) + " and " + present[-1]

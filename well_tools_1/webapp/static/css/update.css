@@ -1,0 +1,96 @@
+/* ============================================================
+   Talos — self-update UI (banner / required modal / blocked)
+   ============================================================ */
+
+/* Optional update: a slim bar just under the brand top bar. */
+.update-banner {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  right: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 20px;
+  font-size: 13px;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(27, 35, 52, 0.96), rgba(18, 24, 38, 0.96));
+  border-bottom: 1px solid var(--bronze);
+  box-shadow: 0 8px 24px -16px var(--bronze-glow);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.update-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bronze-2);
+  box-shadow: 0 0 0 0 var(--bronze-glow);
+  animation: update-pulse 1.8s ease-out infinite;
+  flex-shrink: 0;
+}
+@keyframes update-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(224, 165, 90, 0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(224, 165, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 165, 90, 0); }
+}
+.update-cur { color: var(--muted); }
+.update-spacer { flex: 1; }
+
+.primary-sm, .secondary-sm {
+  font-size: 12.5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.primary-sm { color: #1c1206; background: var(--bronze-grad); border: 1px solid transparent; }
+.primary-sm:hover:not(:disabled) { filter: brightness(1.06); }
+.secondary-sm {
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+}
+.secondary-sm:hover:not(:disabled) { border-color: var(--bronze); color: var(--text); }
+
+/* Required + blocked: a full-screen backdrop with a centered card. */
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 9, 15, 0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 0.2s ease;
+}
+.update-card {
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 30px 30px 26px;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.85);
+}
+.update-card .brand-mark { width: 44px; height: 44px; margin: 0 auto 14px; display: block; }
+.update-card h2 { margin: 0 0 10px; font-size: 20px; }
+.update-card p { margin: 0 0 10px; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+.update-card .update-msg {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+  border: 1px solid var(--info-bd);
+  color: var(--info-fg);
+  font-size: 12.5px;
+}
+.update-actions { margin-top: 18px; }
+.update-actions .primary { width: auto; padding: 11px 28px; }
+.update-progress { margin-top: 16px; font-size: 13px; color: var(--text-dim); }
+
+.update-card--blocked { border-color: var(--error-bd); }
+.update-card--blocked h2 { color: var(--error-fg); }

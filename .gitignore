@@ -52,3 +52,9 @@ well_tools_1/webapp/data/outputs/
 
 # Internal planning docs (not for distribution)
 MIGRATION_PLAN.md
+
+# CI-generated build provenance (release.yml)
+well_tools_1/webapp/build_info.py
+
+# Update-check manifest cache (runtime state)
+well_tools_1/webapp/data/manifest_cache.json

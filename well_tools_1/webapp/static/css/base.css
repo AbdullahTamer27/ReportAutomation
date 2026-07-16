@@ -1,0 +1,91 @@
+/* ============================================================
+   Talos — base: reset, page shell, typography, scrollbars
+   ============================================================ */
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+html { background: var(--bg); }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1100px 600px at 12% -10%, rgba(124, 140, 255, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(160, 107, 255, 0.10), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--topbar-h) + 32px) 22px 72px;
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1 { font-size: 22px; letter-spacing: -0.01em; margin: 0 0 6px; font-weight: 650; }
+h2 { font-weight: 600; letter-spacing: -0.01em; }
+/* SPA headings receive focus on view change (a11y) without a focus ring. */
+h1[tabindex="-1"], h2[tabindex="-1"] { outline: none; }
+
+.subtitle {
+  margin: 0 0 22px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+.center { text-align: center; }
+.muted { color: var(--muted); }
+
+/* ===== Footer (persistent on every view) ===== */
+.app-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  text-align: center;
+  padding: 12px 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: linear-gradient(180deg, rgba(10, 14, 22, 0), rgba(10, 14, 22, 0.92) 45%);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ===== Spinner ===== */
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -2px;
+  margin-right: 4px;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ===== Scrollbars (dark) ===== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); background-clip: padding-box; }

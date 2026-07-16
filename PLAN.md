@@ -4,28 +4,37 @@ Two parallel workstreams, one per branch, with a deliberate dependency: the test
 suite lands first so the release pipeline can **gate on green tests** — we never
 auto-ship a build that failed.
 
-| Branch | Purpose | Order |
-| ------ | ------- | ----- |
-| `feat-testSuite` | Service extraction, pytest infra, fixtures, golden + unit tests | merges to `main` **first** |
-| `Webmitigation`  | Version scheme, GitHub Actions build-on-tag, in-app self-updater | after the test suite exists |
+| Branch | Purpose | Status |
+| ------ | ------- | ------ |
+| `feat-testSuite` | Service extraction, pytest infra, fixtures, golden + unit tests | ✅ merged to `main` |
+| `feat-autoUpdate` | Versioning, build-on-tag, self-updater, **kill switches**, signing, provenance | ◻ in progress |
 
 Keep the two GitHub Actions workflow files separate (`test.yml` vs `release.yml`)
-so they don't conflict once both live on `main`.
+so they don't conflict on `main`.
 
 ### Locked decisions
-1. **Service extraction (A0) is the first task** — done inside `feat-testSuite`.
+1. **Service extraction (A0)** — ✅ done inside `feat-testSuite`.
 2. **Release channel:** public "releases" repo (no token embedded in the app). See
-   [CI/CD → B3](#phase-b3--release-channel-decision) for the reasoning.
-3. **Fixtures:** both a synthesized minimal set *and* a committed real set. The
-   real set goes in `well_tools_1/tests/fixtures/real/` (see that folder's README).
-4. **Install location:** `%APPDATA%\WellTools` (user-writable → updates need no admin).
+   [B3](#phase-b3--release-channel-decision).
+3. **Fixtures:** synthesized set committed; real set is **local-only** (git-ignored,
+   too large + machine-specific) in `well_tools_1/tests/fixtures/real/`.
+4. **Install location:** `%APPDATA%\Talos` (user-writable → updates need no admin).
+5. **Update policy:** optional, user-dismissable — **unless** the maintainer marks a
+   release *required*. Enforced via a control manifest ([B4a](#phase-b4a--control-manifest-kill-switches)).
+6. **Kill switches:** both **universal** (version floor) and **targeted** (per-user),
+   as a *soft* control (deterrent-grade, bypassable by a determined reverse-engineer —
+   accepted for a trusted internal team). Kills are honored from a cached manifest
+   when offline; normal update checks fail-open.
+7. **Threat model = credit theft, not IP secrecy.** Primary defense is *provable
+   authorship* (signed commits + timestamped history + build provenance), with exe
+   hardening as a secondary speed bump. See [Provenance & Hardening](#provenance--hardening).
 
 ---
 
-## Branch A — `feat-testSuite`
+## Branch A — `feat-testSuite` ✅ COMPLETE (merged to `main`)
 
 **Goal:** turn "I hope it still works" into "CI proves it," so every future change
-(including the auto-updater) is safe.
+(including the auto-updater) is safe. All phases A0–A4 done; 52 tests (49 in CI).
 
 ### Phase A0 — Extract the orchestration service *(first task)*
 - Pull the `generate_report` orchestration out of `webapp/main.py` into
@@ -80,54 +89,116 @@ generation path.
 
 ---
 
-## Branch B — `Webmitigation`
+## Branch B — `feat-autoUpdate`
 
 **Goal:** users click **Update Now** and get the latest build — no Python, no
-installer, offline-safe otherwise.
+installer, offline-safe — plus maintainer control (required updates, kill
+switches) and provable authorship baked into every release.
 
 ### Phase B1 — Versioning
-- Single source of truth: `__version__` in the app, shown in the UI.
+- Single source of truth: `__version__` in the app, shown in the UI (About/Help).
 - Semantic versioning; releases are git tags `v*`.
 
 ### Phase B2 — Release build pipeline (`release.yml`)
 - Triggers on `v*` tags; runs on `windows-latest`.
-- **Gates on `feat-testSuite`'s test job passing.**
-- Runs PyInstaller (the `build_webapp.bat` path) → `WellTools.exe`.
-- Creates a GitHub Release, attaches the exe + a checksum + changelog notes.
+- **Gates on the test job passing.**
+- Runs PyInstaller (the `build_webapp.bat` path) → `Talos.exe`.
+- **Build provenance:** stamp the exe (PyInstaller version-info) and the release
+  notes with the **commit SHA** + version, so every binary traces to a signed
+  commit in the private repo.
+- **Code-signs** the exe (self-signed cert from CI secret; see B6).
+- Publishes to the public releases repo: the exe + a `SHA256` checksum + notes.
 
 ### Phase B3 — Release-channel decision
-- **Chosen: a public "releases" repo.** Binaries are published there; the app reads
-  that repo's public API. Source stays private. No secret in the shipped exe.
+- **Chosen: a public "releases" repo** (e.g. `Talos-releases`). Binaries are
+  published there; the app reads that repo's public API. Source stays private. The
+  publish token lives only in CI secrets — never in the shipped exe.
 
 ### Phase B4 — In-app updater
-- On launch, **non-blocking**: read local `__version__` → query the releases repo's
-  `releases/latest` → compare.
-- If newer: "Update available — [notes] — Update now / Later."
-- Offline / API unreachable → silently skip, run the current version.
-- Verify the download checksum before applying.
+- On launch, **non-blocking**: read local `__version__` → check the releases repo →
+  compare.
+- If newer: "Update available — [notes] — Update now / Later." Users can **dismiss**
+  (and "skip this version") unless the release is marked **required** (then the
+  prompt is not dismissable).
+- Offline / unreachable → silently skip, run the current version.
+- Verify the `SHA256` checksum (and, later, the signature) before applying.
+
+### Phase B4a — Control manifest (kill switches)
+A small JSON the app fetches on launch (in the releases repo), driving all the
+maintainer controls from one place:
+```json
+{
+  "latest": "1.2.0",
+  "required_min": "1.1.0",     // required-update floor (dismiss disabled below this)
+  "kill_below": "1.0.0",       // UNIVERSAL kill switch: refuse to run below this
+  "blocked_users": ["<sha256(username)>", "..."],   // TARGETED kill switch
+  "blocked_machines": ["<name>", "..."],            // optional, per-PC
+  "message": "Contact admin if you see this."
+}
+```
+- **Universal kill:** `version < kill_below` → app refuses to run, shows `message`.
+- **Targeted kill:** `sha256(local_username)` in `blocked_users` (hashed so the
+  public manifest never leaks names; keyed on username so a reinstall doesn't evade)
+  → app refuses to run.
+- **Cached-kill / offline:** cache the last manifest; a kill seen in the cache stays
+  in effect offline. Normal update checks fail-open; **kills fail-safe from cache**.
+- Honest limit: soft/deterrent control (a reverse-engineer can patch it out).
 
 ### Phase B5 — Swap-and-restart
-- Download the new exe to temp → launch a small helper that waits for the app to
-  exit, swaps the files, relaunches.
-- App lives in `%APPDATA%\WellTools` (user-writable) → no admin prompt.
+- Download the new exe to temp → small helper waits for exit, swaps files, relaunches.
+- App lives in `%APPDATA%\Talos` (user-writable) → no admin prompt.
 
-### Phase B6 — Signing *(deferred)*
-- Ship **unsigned** first. If AV/SmartScreen complains → **self-sign** and trust the
-  cert on team machines (free). Paid EV cert only if it ever leaves the building.
+### Phase B6 — Code signing *(in scope)*
+- **Self-signed** cert; sign the exe in `release.yml` (`signtool`, cert from a CI
+  secret). Trust the cert on team machines (manual or GPO/Intune) → no AV/SmartScreen
+  warnings internally, and update integrity (each build is provably an unaltered
+  official build). Paid EV cert only if it ever leaves the building.
 
-**Definition of done:** pushing a `v*` tag auto-builds and publishes a release; a
-running app detects it, updates on click, and relaunches on the new version —
-verified on a real Windows machine; the offline path degrades gracefully.
+**Definition of done:** pushing a signed `v*` tag auto-builds, signs, and publishes;
+a running app detects it, updates on click, relaunches; required/kill/blocked states
+all behave; offline degrades gracefully — verified on a real Windows machine.
 
-**Risks / notes:** the swap-restart is the fiddly bit and needs a Windows
-integration test; AV behaviour is environment-dependent (hence deferred signing).
-The version-compare and API-parse logic is unit-testable cross-platform — put those
-tests in `feat-testSuite`.
+**Risks / notes:** swap-restart is the fiddly bit (Windows integration test); the
+version-compare, manifest-parse, hash-block, and cached-kill logic are all
+unit-testable cross-platform → add them to the suite.
 
 ---
 
+## Provenance & Hardening
+
+Threat model: **credit theft by an internal colleague**, not IP monetization. The
+primary defense is making authorship *overwhelmingly, independently provable*;
+exe hardening is a secondary speed bump (no client-side measure stops a determined
+reverse-engineer — accepted).
+
+### P1 — Provable authorship *(do first / ongoing)*
+- **Signed commits** — enable GPG or SSH commit signing so every commit is
+  cryptographically bound to your identity; push frequently to keep the timestamped
+  history dense and continuous on the server (which you don't control → strong).
+- **Author + `LICENSE` headers** naming you; keep it in the source.
+- **Contemporaneous record** — a dated note/demo to management that you built it, so
+  a later claim contradicts an established prior fact (pre-emption > detection).
+- **Be the visible source** — you demo, you ship releases, you own the changelog.
+  The release pipeline itself makes you the continuous, attributed author of every
+  version the team runs; a silent hijack needs repo/CI access you control.
+
+### P2 — Build provenance *(part of B2)*
+- Stamp every exe with its **commit SHA + version**; release notes reference the
+  signed commit → each binary traces back to your history.
+
+### P3 — Exe hardening *(secondary; raises cost, not a wall)*
+- Current PyInstaller exe ships decompilable bytecode. Options, in order of value:
+  **Nuitka** (compile Python → native C; much harder to reverse) > **PyArmor**
+  (obfuscate bytecode). Evaluate Nuitka as a build option; treat as a deterrent.
+- Code signing (B6) is *integrity*, not secrecy — it proves a build is yours/unaltered.
+
 ## Sequencing
-1. **A0 → A2** (extract service + golden safety net) — smallest path to "safe changes."
-2. **A3 → A4** (unit tests + CI) → merge `feat-testSuite` to `main`.
-3. **B1 → B5** on `Webmitigation`, with `release.yml` depending on the test job.
-4. **B6** only if reality demands it.
+1. ✅ **A0 → A4** — done, merged to `main`.
+2. **P1 (commit signing)** — set up now; it hardens authorship immediately and is
+   independent of everything else.
+3. **B1 → B3** — versioning, releases repo, `release.yml` (with P2 provenance + B6
+   signing built in), gated on the test job.
+4. **B4 → B4a → B5** — updater, control manifest (kill switches), swap-restart;
+   unit-test the manifest/version/hash/cached-kill logic.
+5. **P3 (Nuitka)** — evaluate once the pipeline works; only if you want the extra
+   deterrent.

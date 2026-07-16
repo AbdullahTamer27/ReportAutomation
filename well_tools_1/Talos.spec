@@ -1,10 +1,10 @@
-# WellTools.spec
-# PyInstaller spec — one-dir build for the Well Tools desktop web app.
+# Talos.spec
+# PyInstaller spec — one-dir build for the Talos desktop web app.
 #
 # Run from the well_tools_1/ directory (where this file lives):
-#   pyinstaller --clean --noconfirm WellTools.spec
+#   pyinstaller --clean --noconfirm Talos.spec
 #
-# Output: dist/WellTools/WellTools.exe  (+ _internal/ with all dependencies)
+# Output: dist/Talos/Talos.exe  (+ _internal/ with all dependencies)
 
 import os
 import sys
@@ -22,6 +22,11 @@ fitz_data, fitz_bins, fitz_hidden = collect_all("fitz")
 # in the frozen build — without this the EXE crashes the first time it draws.
 mpl_data, mpl_bins, mpl_hidden = collect_all("matplotlib")
 
+# certifi ships the CA bundle the self-updater verifies TLS against. Collect its
+# cacert.pem so certifi.where() resolves inside the frozen exe — without it,
+# HTTPS to GitHub fails with CERTIFICATE_VERIFY_FAILED (update download breaks).
+certifi_data, certifi_bins, certifi_hidden = collect_all("certifi")
+
 # pywin32 system DLLs (pythoncom3X.dll, pywintypes3X.dll) must be in the
 # bundle root so Windows COM infrastructure can find them at run-time.
 # Without this, docx2pdf silently fails when launched from the frozen EXE.
@@ -38,7 +43,7 @@ block_cipher = None
 a = Analysis(
     ["webapp/app.py"],
     pathex=["."],                    # well_tools_1/ — finds both packages
-    binaries=wv_bins + fitz_bins + mpl_bins + _pywin32_dlls,
+    binaries=wv_bins + fitz_bins + mpl_bins + certifi_bins + _pywin32_dlls,
     datas=[
         # Static frontend served by FastAPI
         ("webapp/static",           "webapp/static"),
@@ -46,9 +51,9 @@ a = Analysis(
         ("webapp/data/templates",   "webapp/data/templates"),
         # Bundled company-logos folder (manifest.json + logo images)
         ("webapp/data/companies",   "webapp/data/companies"),
-    ] + wv_data + fitz_data + mpl_data,
+    ] + wv_data + fitz_data + mpl_data + certifi_data,
     hiddenimports=(
-        wv_hidden + fitz_hidden + mpl_hidden
+        wv_hidden + fitz_hidden + mpl_hidden + certifi_hidden
         + collect_submodules("well_tools")   # engine + core
         + collect_submodules("sqlalchemy")
         + [
@@ -110,17 +115,17 @@ exe = EXE(
     a.zipfiles,
     a.datas,            # onefile: bundle static frontend + templates into the EXE
     [],
-    name="WellTools",
+    name="Talos",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,            # UPX can trigger antivirus false-positives; keep off
     runtime_tmpdir=None,  # unpack to the OS temp dir at launch
     console=False,        # no terminal window — change to True to see server logs
-    icon=None,            # swap in an .ico path to brand the EXE
+    icon="talos.ico",     # Talos sentinel-helm mark (built from static/img/talos-icon.svg)
 )
 
-# NOTE: one-file build. Output is a single dist/WellTools.exe.
+# NOTE: one-file build. Output is a single dist/Talos.exe.
 # (Previous one-dir COLLECT removed.) The exe still requires the Edge WebView2
 # runtime (UI) and Microsoft Word (PDF preview) on the target machine — those
 # are external apps and cannot be embedded into the executable.

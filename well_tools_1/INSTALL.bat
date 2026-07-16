@@ -1,12 +1,12 @@
 @echo off
 REM ============================================================
-REM  Well Tools — first-run installer
-REM  Run this ONCE on a new machine before using WellTools.exe
-REM  After this, double-click WellTools.exe directly every time.
+REM  Talos — first-run installer
+REM  Run this ONCE on a new machine before using Talos.exe
+REM  After this, double-click Talos.exe directly every time.
 REM ============================================================
 
 echo.
-echo === Well Tools Setup ===
+echo === Talos Setup ===
 echo.
 
 REM --- 1. Visual C++ Runtime (required by Python / the EXE itself) ----------
@@ -36,8 +36,8 @@ if exist "MicrosoftEdgeWebview2Setup.exe" (
 
 echo.
 echo ============================================================
-echo  Setup complete. Launching Well Tools...
+echo  Setup complete. Launching Talos...
 echo ============================================================
 echo.
 
-start "" "WellTools.exe"
+start "" "Talos.exe"

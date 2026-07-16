@@ -3,10 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Well Tools</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <title>Talos</title>
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/brand.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/update.css" />
 </head>
 <body>
+
+  <!-- ===== Brand top bar (persistent banner) ===== -->
+  <header class="topbar" role="banner">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Talos</span>
+    <span id="brandVersion" class="brand-version" hidden></span>
+    <span id="brandContext" class="brand-context"></span>
+    <span class="topbar-spacer"></span>
+  </header>
 
   <!-- ===== View 1: Mode selection ===== -->
   <section id="view-mode" class="view">
@@ -59,7 +73,7 @@
         </div>
 
         <button id="tmRegister" type="button" class="primary" style="margin-top:4px">Register Template</button>
-        <div id="tmStatus" class="status" hidden></div>
+        <div id="tmStatus" class="status" role="status" aria-live="polite" hidden></div>
       </div>
 
       <!-- Current templates list -->
@@ -97,7 +111,7 @@
         </div>
 
         <button id="cmRegister" type="button" class="primary" style="margin-top:4px">Register Company</button>
-        <div id="cmStatus" class="status" hidden></div>
+        <div id="cmStatus" class="status" role="status" aria-live="polite" hidden></div>
       </div>
 
       <!-- Current companies list -->
@@ -131,7 +145,15 @@
       </section>
 
       <button id="ghostMerge" type="button" class="primary">Merge &amp; Export</button>
-      <div id="ghostStatus" class="status" hidden></div>
+
+      <p class="section-label">Or merge a whole folder</p>
+      <section class="field">
+        <div class="picker">
+          <button id="ghostPickFolder" type="button" class="secondary">Choose folder &amp; merge every CSV…</button>
+        </div>
+        <p class="hint">Points at a folder and merges every Joint-Analysis CSV in it — one <code>merged_*.xlsx</code> written beside each, using the length above.</p>
+      </section>
+      <div id="ghostStatus" class="status" role="status" aria-live="polite" hidden></div>
       <pre id="ghostPreview" class="preview-text" hidden></pre>
     </main>
   </section>
@@ -144,8 +166,15 @@
         <header>
           <button type="button" class="link-back" data-nav="mode">← Back</button>
           <h1>Report Automation</h1>
-          <p class="subtitle">Provide your Excel data and the working directory.</p>
+          <p class="subtitle">Open the well's folder — or set each input manually.</p>
         </header>
+
+        <section class="field">
+          <button id="openWellFolder" type="button" class="primary">Open well folder…</button>
+          <p id="wellFolderHint" class="hint">Pick the well's folder once — Talos finds the Excel, XML, schematic PDF, and IMGS/ inside and fills the fields for you.</p>
+        </section>
+
+        <p class="section-label">Or set manually</p>
 
         <section class="field">
           <label>Excel data file</label>
@@ -188,7 +217,7 @@
         </div>
 
         <button id="toWorkspace" type="button" class="primary">Continue</button>
-        <div id="inputsStatus" class="status" hidden></div>
+        <div id="inputsStatus" class="status" role="status" aria-live="polite" hidden></div>
       </main>
 
       <!-- Right half: instructions + sub-feature managers -->
@@ -246,7 +275,7 @@
         <!-- Required inputs -->
         <section class="field">
           <label for="configInput">Configuration</label>
-          <input type="text" id="configInput" class="text-input" list="configPresets"
+          <input type="text" id="configInput" class="text-input mono" list="configPresets"
                  placeholder="e.g. 4.5x3.5TBG-7LNR-9.625-13.375-18.625" autocomplete="off" />
           <datalist id="configPresets">
             <option value="4.5TBG-7-9.625-13.375"></option>
@@ -288,23 +317,23 @@
 
         <section class="field">
           <label for="btmDepth">Bottom depth <span class="opt">(optional)</span></label>
-          <input type="text" id="btmDepth" class="text-input" placeholder="e.g. 7233 ft" />
+          <input type="text" id="btmDepth" class="text-input mono" placeholder="e.g. 7233 ft" />
         </section>
 
         <div class="field-row">
           <section class="field">
             <label for="logDate">Log date <span class="opt">(optional)</span></label>
-            <input type="text" id="logDate" class="text-input" placeholder="e.g. 09-Sep-2020" />
+            <input type="text" id="logDate" class="text-input mono" placeholder="e.g. 09-Sep-2020" />
           </section>
           <section class="field">
             <label for="origComp">Original completion <span class="opt">(optional)</span></label>
-            <input type="text" id="origComp" class="text-input" placeholder="e.g. 26-Apr-1988" />
+            <input type="text" id="origComp" class="text-input mono" placeholder="e.g. 26-Apr-1988" />
           </section>
         </div>
 
         <section class="field">
           <label for="lastWko">Last workover <span class="opt">(optional)</span></label>
-          <input type="text" id="lastWko" class="text-input" placeholder="e.g. 03-Mar-2024 (or N/A)" />
+          <input type="text" id="lastWko" class="text-input mono" placeholder="e.g. 03-Mar-2024 (or N/A)" />
         </section>
 
         <section class="field">
@@ -321,8 +350,15 @@
           </label>
         </section>
 
+        <section class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="fw16" />
+            <span>FW16 tool (K-factor set)</span>
+          </label>
+        </section>
+
         <button id="generate" type="button" class="primary">Generate Report</button>
-        <div id="status" class="status" hidden></div>
+        <div id="status" class="status" role="status" aria-live="polite" hidden></div>
       </main>
 
       <aside id="previewPanel" class="preview" hidden>
@@ -337,9 +373,9 @@
   </section>
 
   <footer class="app-footer">
-    © 2026 Well Tools · Released under the MIT License
+    © 2026 Talos · Released under the MIT License
   </footer>
 
-  <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

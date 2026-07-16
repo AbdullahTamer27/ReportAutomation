@@ -17,7 +17,7 @@ from datetime import datetime
 
 from well_tools.report.report_builder import build_automation_report  # noqa: F401
 from well_tools.report.pipe_config import (
-    build_pipe_model, ConfigParseError, sizes_list_string,  # noqa: F401
+    build_pipe_model, ConfigParseError, sizes_with_label, pipe_config_phrase,  # noqa: F401
 )
 
 from .naming import normalize_date, safe_filename, report_filename
@@ -29,6 +29,7 @@ OPTIONAL_DEFAULT = "N/A"
 def generate(*, template_path, company_name, company_logo_path,
              excel_path, working_dir, xml_path,
              config, damage_count=0, include_disclaimer=False, wellhead_damage=None,
+             fw16=False,
              well_name=None, well_type=None, btm_depth=None, field=None,
              log_date=None, orig_comp=None, last_wko=None,
              progress=None, review=None):
@@ -82,13 +83,19 @@ def generate(*, template_path, company_name, company_logo_path,
         "{{last_wko}}": _opt_date(last_wko, "Last workover"),
         # Delivery date = today's date, formatted like the other dates. Auto-filled.
         "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
+        # Damage present ⇒ " and Hotspots" (place the tag right after the word,
+        # e.g. "Metal Loss{{hotspot}}"); no damage ⇒ nothing.
+        "{{hotspot}}": " and Hotspots" if damage_count else "",
+        # Tool-type K-factors: FW16 uses a flat 1.2 set; the default otherwise.
+        "{{tool_type}}": ("(K1=1.2, K2=1.2, K3=1.2, K4=1.2)" if fw16
+                          else "(K1=0.45, K2=0.55, K3=0.7, K4=0.9)"),
     }
     if defaulted:
         notes.append(
             f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
         )
     # Auto-derived tags never nag if a template doesn't use them.
-    text_fields_quiet = {"{{delivery_date}}"}
+    text_fields_quiet = {"{{delivery_date}}", "{{hotspot}}", "{{tool_type}}"}
 
     # Company-conditional lines: kept only when that company is chosen.
     is_weatherford = (company_name or "").strip().lower() == "weatherford"
@@ -107,10 +114,18 @@ def generate(*, template_path, company_name, company_logo_path,
                 tag = f"{{{{{role}_{key}}}}}"
                 text_fields[tag] = val
                 text_fields_quiet.add(tag)
-        # Casing / liner / tubing size lists (sizes only, largest first).
+        # Casing / liner / tubing lists, largest first, ending with the type word
+        # (e.g. '18 5/8", 13 3/8", 9 5/8" casing strings'). Tubings lead with
+        # "and " so they read as the last clause after the casing/liner lists.
         for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
-            text_fields[tag] = sizes_list_string(pipe_model, code)
+            val = sizes_with_label(pipe_model, code)
+            if code == "TBG" and val:
+                val = f"and {val}"
+            text_fields[tag] = val
             text_fields_quiet.add(tag)
+        # Natural-language list of pipe types present, e.g. "tubing, liner and casing".
+        text_fields["{{pipe_config}}"] = pipe_config_phrase(pipe_model)
+        text_fields_quiet.add("{{pipe_config}}")
 
     # Damage-section overlays: the picture clusters (worst C/D per pipe per
     # interval), enriched with severity + THICKNESS channel. Needs the XML.
@@ -123,6 +138,18 @@ def generate(*, template_path, company_name, company_logo_path,
         except Exception as e:  # noqa: BLE001 — overlays are best-effort
             log(f"Damage-cluster computation failed: {e}")
             notes.append(f"⚠ Damage overlays skipped — {e}")
+
+    # Interval table (the {{INTERVALS}} block): compute the same interval rows the
+    # RawData workbook is built from, so the in-report table matches the Excel.
+    # Best-effort; templates without the tag ignore it.
+    interval_records = None
+    if xml_path and os.path.isfile(xml_path):
+        try:
+            from well_tools.report.interval_table import build_interval_records
+            interval_records = build_interval_records(xml_path, excel_path)
+        except Exception as e:  # noqa: BLE001 — non-fatal, table just stays empty
+            log(f"Interval-table data failed: {e}")
+            notes.append(f"⚠ Interval table skipped — {e}")
 
     # Fold in the Interval Generator: build the Raw Data table from the XML into a
     # SEPARATE workbook beside the report — the data Excel is never opened for
@@ -160,6 +187,7 @@ def generate(*, template_path, company_name, company_logo_path,
         text_fields_quiet=text_fields_quiet,
         wellhead_damage=wellhead_damage,
         damage_clusters=damage_clusters,
+        interval_records=interval_records,
         single_doc_io=True,   # open the Word file once, save once (verified identical)
         progress=log,
         review=on_review,

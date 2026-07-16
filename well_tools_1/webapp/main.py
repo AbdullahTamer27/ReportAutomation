@@ -51,7 +51,7 @@ from .registry import (  # noqa: E402
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 from .interval import generate_raw_data, generate_raw_data_file, IntervalInputError  # noqa: E402
-from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
+from .ghost import merge_ghost_collars, merge_ghost_folder, GhostInputError  # noqa: E402
 
 from well_tools.report.pipe_config import (  # noqa: E402
     build_pipe_model, ConfigParseError, deepest_point_from_xml, format_depth,
@@ -94,6 +94,7 @@ class GenerateRequest(BaseModel):
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
     field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
     wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
+    fw16: bool = Field(False, description="FW16 tool: use the flat 1.2 K-factor set for {{tool_type}} (else the default set)")
     xml_path: str | None = Field(None, description="WellSchematic XML; when given, the Raw Data sheet is (re)written into the data Excel")
 
 
@@ -206,6 +207,20 @@ class SchematicResponse(BaseModel):
     warnings: list[str]
 
 
+class WellFolderRequest(BaseModel):
+    folder_path: str = Field(..., description="Absolute path to a single well's folder")
+
+
+class WellFolderResponse(BaseModel):
+    working_dir: str
+    excel_path: str | None = None
+    xml_path: str | None = None
+    schematic_pdf: str | None = None
+    imgs_dir: str | None = None
+    found: list[str] = []
+    missing: list[str] = []
+
+
 class IntervalRequest(BaseModel):
     xml_path: str = Field(..., description="Absolute path to the WellSchematic .xml file")
     template_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm template to update in place")
@@ -225,6 +240,29 @@ class GhostResponse(BaseModel):
     output_rows: int
     merged_chains: int
     preview: str
+
+
+class GhostFolderRequest(BaseModel):
+    folder_path: str = Field(..., description="Folder holding Joint-Analysis .csv files")
+    ghost_collar_length: float = Field(3.0, gt=0, description="Merge collars >= this length (ft)")
+
+
+class GhostFolderItem(BaseModel):
+    file: str
+    ok: bool
+    output_path: str | None = None
+    input_rows: int | None = None
+    output_rows: int | None = None
+    merged_chains: int | None = None
+    error: str | None = None
+
+
+class GhostFolderResponse(BaseModel):
+    folder: str
+    threshold: float
+    succeeded: int
+    failed: int
+    results: list[GhostFolderItem]
 
 
 class IntervalResponse(BaseModel):
@@ -265,7 +303,7 @@ def index():
 def _startup():
     """Create tables and seed the registry from the manifest."""
     # On a frozen build, copy bundled templates into the persistent data dir
-    # (%APPDATA%\WellTools) on first run before anything reads the manifest.
+    # (%APPDATA%\Talos) on first run before anything reads the manifest.
     ensure_user_data()
     init_db()
     db = SessionLocal()
@@ -279,7 +317,32 @@ def _startup():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    from .update_service import current_version
+    return {"status": "ok", "version": current_version()}
+
+
+@app.get("/api/update/check")
+def update_check():
+    """Launch decision from the control manifest (update / required / blocked)."""
+    from . import update_service
+    return update_service.check()
+
+
+@app.post("/api/update/apply")
+def update_apply():
+    """Download + verify + swap-restart to the latest build (packaged app only).
+
+    On success in the packaged build the process exits to let the helper swap the
+    exe, so this call won't return; any error is surfaced to the UI."""
+    from . import update_service
+    try:
+        update_service.apply_update()
+        return {"ok": True}
+    except update_service.UpdateError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Update apply failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/interval/generate", response_model=IntervalResponse)
@@ -394,6 +457,30 @@ def schematic_parse(req: SchematicRequest):
     return SchematicResponse(**result)
 
 
+@app.post("/api/well-folder/scan", response_model=WellFolderResponse)
+def well_folder_scan(req: WellFolderRequest):
+    """Discover a well's inputs from a single folder pick: the .xlsm/.xlsx data
+    workbook, the WellSchematic .xml, the schematic .pdf, and the IMGS/ image
+    folder — so the user chooses one folder instead of four files. Read-only.
+
+    The generated ``*_RawData.xlsx`` is excluded so it's never mistaken for the
+    source workbook. When several candidates match, the first alphabetically wins
+    (PDFs prefer a name hinting at a cross-section plot); anything not found is
+    reported in ``missing`` for the user to set manually."""
+    folder = req.folder_path
+    if not folder or not os.path.isdir(folder):
+        raise HTTPException(status_code=400, detail="Folder not found at that path.")
+    try:
+        from .discovery import scan_well_folder
+        result = scan_well_folder(folder)
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"Cannot read the folder: {e}")
+
+    logger.info("Well-folder scan | %s | found=%s missing=%s",
+                folder, result["found"], result["missing"])
+    return WellFolderResponse(**result)
+
+
 @app.post("/api/ghost/merge", response_model=GhostResponse)
 def ghost_merge(req: GhostRequest):
     """Ghost Collar Merger: merge ghost-collar chains in a Joint-Analysis CSV and
@@ -408,6 +495,23 @@ def ghost_merge(req: GhostRequest):
         logger.exception("Ghost merge failed")
         raise HTTPException(status_code=500, detail=f"Ghost merge failed: {e}")
     return GhostResponse(**result)
+
+
+@app.post("/api/ghost/merge-folder", response_model=GhostFolderResponse)
+def ghost_merge_folder(req: GhostFolderRequest):
+    """Batch Ghost Merger: run the merge on every Joint-Analysis .csv in a folder,
+    writing a merged_*.xlsx beside each. One bad file doesn't stop the rest."""
+    logger.info("Ghost folder merge | folder=%s | threshold=%s",
+                req.folder_path, req.ghost_collar_length)
+    try:
+        result = merge_ghost_folder(req.folder_path, req.ghost_collar_length)
+    except GhostInputError as e:
+        logger.warning("Ghost folder input error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Ghost folder merge failed")
+        raise HTTPException(status_code=500, detail=f"Ghost folder merge failed: {e}")
+    return GhostFolderResponse(**result)
 
 
 def _template_to_dict(t: Template) -> dict:
@@ -573,6 +677,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             damage_count=req.damage_count,
             include_disclaimer=req.include_disclaimer,
             wellhead_damage=req.wellhead_damage,
+            fw16=req.fw16,
             well_name=req.well_name,
             well_type=req.well_type,
             btm_depth=req.btm_depth,

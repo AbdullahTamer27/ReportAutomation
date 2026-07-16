@@ -11,6 +11,11 @@ sqlalchemy
 # --- Native window + packaging support (Phase 5) ---
 pywebview
 
+# --- Self-update TLS (Branch B) ---
+# The frozen exe can't rely on the OS cert store; certifi ships a CA bundle so
+# HTTPS to GitHub (manifest + release download) verifies on every machine.
+certifi
+
 # --- PDF rendering + preview (Phase 4) ---
 pymupdf
 docx2pdf
@@ -20,4 +25,8 @@ python-docx
 openpyxl
 pandas
 lxml
-matplotlib
+# matplotlib + numpy are PINNED: the CI-built exe must render the pie charts
+# identically to the dev machine. An unpinned matplotlib pulled a version whose
+# pie-label behaviour differed and rendered the chart numbers blank in the exe.
+matplotlib==3.11.0
+numpy==2.4.6

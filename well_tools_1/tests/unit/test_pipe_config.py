@@ -99,3 +99,35 @@ def test_pipes_from_xml_taper_in_one_pipeset_stays_one_pipe(tmp_path):
     tbg = [p for p in pipes if p["type"] == "TBG"][0]
     assert sorted(tbg["sizes"], reverse=True) == [4.5, 3.5]   # both ODs, one pipe
     assert tbg["role"] == "firstPipe"
+
+
+@pytest.mark.parametrize("types, expected", [
+    (["TBG", "CSG"], "tubing and casing"),
+    (["TBG", "LNR", "CSG"], "tubing, liner and casing"),
+    (["CSG", "CSG", "CSG"], "casing"),               # de-duplicated by type
+    (["CSG", "TBG"], "tubing and casing"),           # ordered inside-out, not input order
+    (["TBG"], "tubing"),
+    ([], ""),
+])
+def test_pipe_config_phrase(types, expected):
+    assert pc.pipe_config_phrase([{"type": t} for t in types]) == expected
+
+
+@pytest.mark.parametrize("code, pipes, expected", [
+    ("CSG", [("CSG", 18.625), ("CSG", 13.375), ("CSG", 9.625)],
+     '18 5/8", 13 3/8", 9 5/8" casing strings'),           # plural, largest first
+    ("TBG", [("TBG", 4.5)], '4 1/2" tubing string'),        # singular
+    ("CSG", [("CSG", 9.625)], '9 5/8" casing string'),      # singular
+    ("LNR", [("CSG", 9.625)], ""),                          # none of that type
+])
+def test_sizes_with_label(code, pipes, expected):
+    model = [{"type": t, "sizes": [s]} for t, s in pipes]
+    assert pc.sizes_with_label(model, code) == expected
+
+
+def test_parse_triple_taper():
+    pipes = pc.parse_config("4.5x3.5x2.875TBG-7LNR-9.625")
+    assert pipes[0]["sizes"] == [4.5, 3.5, 2.875]
+    assert pipes[0]["tapered"] is True
+    assert pipes[0]["suffix"] == '4 1/2" × 3 1/2" × 2 7/8" TBG'
+    assert pc.config_string_from_pipes(pipes).startswith("4.5x3.5x2.875TBG")

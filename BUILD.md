@@ -1,4 +1,4 @@
-# Building the WellTools Desktop EXE (Phase 5)
+# Building the Talos Desktop EXE (Phase 5)
 
 ## Prerequisites — build machine
 
@@ -36,36 +36,36 @@ build_webapp.bat
 Or run PyInstaller directly:
 
 ```bat
-pyinstaller --clean --noconfirm WellTools.spec
+pyinstaller --clean --noconfirm Talos.spec
 ```
 
-This is a **one-file** build (`WellTools.spec`). Output is a single
+This is a **one-file** build (`Talos.spec`). Output is a single
 self-contained executable:
 
 ```
-well_tools_1\dist\WellTools.exe   ← the only file users need
+well_tools_1\dist\Talos.exe   ← the only file users need
 ```
 
 The frontend, bundled templates, Python runtime, and all DLLs are packed inside
 the EXE. At launch it unpacks to a temp folder (so first start takes ~2–3 s).
 
-**Distribute just `WellTools.exe`.** On a Windows 11 machine with Microsoft
+**Distribute just `Talos.exe`.** On a Windows 11 machine with Microsoft
 Office, that single file is all you need.
 
 For *clean* machines that may lack the runtimes, ship these alongside it (all in
 one folder) so the one-time installer can run:
 
 ```
-WellTools.exe
+Talos.exe
 INSTALL.bat                    ← run once on new machines
 vc_redist.x64.exe              ← download from https://aka.ms/vs/17/release/vc_redist.x64.exe
 MicrosoftEdgeWebview2Setup.exe ← download from https://developer.microsoft.com/microsoft-edge/webview2/
 ```
 
-Then zip: `WellTools_v1.0.zip`
+Then zip: `Talos_v1.0.zip`
 
 **On any new machine:** unzip → run `INSTALL.bat` once → done.
-After that, double-click `WellTools.exe` directly every time. (On Win11 + Office
+After that, double-click `Talos.exe` directly every time. (On Win11 + Office
 you can skip `INSTALL.bat` and just run the EXE.)
 
 ### Where the app stores its data
@@ -74,23 +74,23 @@ Because this is a one-file build (the EXE's temp folder is wiped on exit), all
 **writable** data lives in a permanent per-user location:
 
 ```
-%APPDATA%\WellTools\
+%APPDATA%\Talos\
     app.db          ← report-run history
     templates\      ← seeded from the bundle on first run; Template Manager writes here
     outputs\        ← PDF-preview cache
 ```
 
-Rebuilding and replacing `WellTools.exe` therefore **no longer wipes** the
+Rebuilding and replacing `Talos.exe` therefore **no longer wipes** the
 database or any user-added templates — they persist in `%APPDATA%`.
 
 ---
 
 ## First run on a clean machine
 
-1. Unzip `WellTools_v1.0.zip` anywhere (e.g. `C:\WellTools\`).
-2. Double-click `WellTools.exe`.
-3. The first launch creates `%APPDATA%\WellTools\app.db` and seeds the template registry from the bundled `manifest.json` (copying the bundled templates into `%APPDATA%\WellTools\templates\`). This takes 2–3 seconds.
-4. The Well Tools window opens. Verify:
+1. Unzip `Talos_v1.0.zip` anywhere (e.g. `C:\Talos\`).
+2. Double-click `Talos.exe`.
+3. The first launch creates `%APPDATA%\Talos\app.db` and seeds the template registry from the bundled `manifest.json` (copying the bundled templates into `%APPDATA%\Talos\templates\`). This takes 2–3 seconds.
+4. The Talos window opens. Verify:
    - The **home screen** shows three mode cards.
    - **Template Manager** lists the bundled templates.
    - **Report Automation** → choose an Excel file and working folder → template dropdown is populated.
@@ -103,7 +103,7 @@ database or any user-added templates — they persist in `%APPDATA%`.
 
 ## Debugging a broken build
 
-In `WellTools.spec`, change:
+In `Talos.spec`, change:
 
 ```python
 console=False,   # production (no terminal)
@@ -122,14 +122,14 @@ Rebuild and rerun — the terminal prints Uvicorn logs and Python tracebacks.
 ## Adding templates without rebuilding
 
 Use the **Template Manager** inside the app — point it at any `.docx` and it
-copies the file into `%APPDATA%\WellTools\templates\` for you:
+copies the file into `%APPDATA%\Talos\templates\` for you:
 1. Open the app → **Template Manager** → **Register a new template** → pick the `.docx`.
 2. The dropdown updates immediately; `manifest.json` is rewritten automatically.
 
 > **Note:** Writable data (DB + user-added templates) now lives in
-> `%APPDATA%\WellTools\`, **outside** the EXE. Replacing `WellTools.exe` with a
+> `%APPDATA%\Talos\`, **outside** the EXE. Replacing `Talos.exe` with a
 > new build no longer touches it, so report history and added templates survive
-> upgrades. To start fresh, delete the `%APPDATA%\WellTools\` folder.
+> upgrades. To start fresh, delete the `%APPDATA%\Talos\` folder.
 
 ---
 
@@ -139,8 +139,8 @@ Set the `TEMPLATES_DIR` environment variable before launching to point at a
 shared drive — no code change or rebuild needed:
 
 ```bat
-set TEMPLATES_DIR=\\server\share\WellToolsTemplates
-WellTools.exe
+set TEMPLATES_DIR=\\server\share\TalosTemplates
+Talos.exe
 ```
 
 Or create a wrapper `.bat` file that sets the variable and launches the EXE.

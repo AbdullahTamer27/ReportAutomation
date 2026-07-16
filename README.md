@@ -1,4 +1,4 @@
-# Well Tools
+# Talos
 
 > A desktop toolkit for automating well-integrity reporting — turning WellSchematic XML, Excel inspection data, and a folder of images into polished, ready-to-send Word reports.
 
@@ -14,7 +14,7 @@
 
 ## Overview
 
-**Well Tools** runs as a native desktop window backed by a local web app (FastAPI + a vanilla-JS frontend in a [pywebview](https://pywebview.flowrl.com/) shell). Everything runs locally — no servers, no cloud, no manual copy-paste — and ships as a single `WellTools.exe`.
+**Talos** runs as a native desktop window backed by a local web app (FastAPI + a vanilla-JS frontend in a [pywebview](https://pywebview.flowrl.com/) shell). Everything runs locally — no servers, no cloud, no manual copy-paste — and ships as a single `Talos.exe`.
 
 It bundles two tools:
 
@@ -43,7 +43,7 @@ It bundles two tools:
 - 🔎 **Report notes** — engine warnings (missing images, untagged headers, grade corrections, summary mismatches, config/Excel pipe-count mismatches) surface in the UI after each run.
 - 👁️ **PDF preview** — generated reports render to page images in-app (requires Microsoft Word for the conversion).
 - ⚡ **Fast generation** — the Word document is opened and saved **once** for the whole pipeline (not once per pass), and the Excel workbook and XML schematic are each parsed once and cached. A golden-file harness (`tools/`) proves these optimizations leave the output byte-for-byte identical.
-- 📦 **Single-file build** — ships as a standalone `WellTools.exe` via PyInstaller, with persistent data in `%APPDATA%\WellTools`.
+- 📦 **Single-file build** — ships as a standalone `Talos.exe` via PyInstaller, with persistent data in `%APPDATA%\Talos`.
 
 ---
 
@@ -53,7 +53,7 @@ It bundles two tools:
 ReportAutomation/
 └── well_tools_1/
     ├── run.py                    # Legacy tkinter entry point
-    ├── WellTools.spec            # PyInstaller spec (single-file EXE)
+    ├── Talos.spec            # PyInstaller spec (single-file EXE)
     ├── build_webapp.bat          # One-click Windows build
     ├── tools/                    # Dev harness (not shipped)
     │   ├── golden_report.py      # Byte/behaviour-diff of two generated reports
@@ -143,7 +143,7 @@ cd well_tools_1
 build_webapp.bat
 ```
 
-The result lands at `dist\WellTools.exe`. On first run it seeds bundled templates and company logos into `%APPDATA%\WellTools`.
+The result lands at `dist\Talos.exe`. On first run it seeds bundled templates and company logos into `%APPDATA%\Talos`.
 
 ### Verify a pipeline change didn't alter output
 
@@ -241,7 +241,7 @@ Released under the [MIT License](LICENSE).
 ```
 MIT License
 
-Copyright (c) 2026 Well Tools
+Copyright (c) 2026 Talos
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
