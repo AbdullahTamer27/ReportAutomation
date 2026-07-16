@@ -45,7 +45,7 @@ _BOTTOM_BODY_IDX = 2
 _MAX_LOSS_IDX = 7
 
 _SEGMENT = re.compile(
-    r"^\s*(\d+(?:\.\d+)?)(?:[xX×](\d+(?:\.\d+)?))?\s*(TBG|LNR|CSG)?\s*$",
+    r"^\s*(\d+(?:\.\d+)?(?:\s*[xX×]\s*\d+(?:\.\d+)?)*)\s*(TBG|LNR|CSG)?\s*$",
     re.IGNORECASE,
 )
 
@@ -100,18 +100,16 @@ def parse_config(config_str):
         m = _SEGMENT.match(seg)
         if not m:
             raise ConfigParseError(
-                f"Can't read pipe '{seg.strip()}'. Use e.g. 4.5x3.5TBG, 7LNR, or 9.625."
+                f"Can't read pipe '{seg.strip()}'. Use e.g. 4.5x3.5x2.875TBG, 7LNR, or 9.625."
             )
-        size1 = float(m.group(1))
-        size2 = float(m.group(2)) if m.group(2) else None
-        type_code = (m.group(3) or "CSG").upper()
-        sizes = [size1] + ([size2] if size2 is not None else [])
+        sizes = [float(s) for s in re.split(r"\s*[xX×]\s*", m.group(1))]
+        type_code = (m.group(2) or "CSG").upper()
         label = _sizes_label(sizes)
         pipes.append({
             "index": i + 1,
             "role": ROLE_NAMES[i],
             "sizes": sizes,
-            "tapered": size2 is not None,
+            "tapered": len(sizes) > 1,
             "type": type_code,                         # TBG / LNR / CSG
             "name": f"{label} {TYPE_FULL[type_code]}",  # full, e.g. 4 1/2" × 3 1/2" Tubing
             "suffix": f"{label} {type_code}",           # abbreviated, e.g. … TBG

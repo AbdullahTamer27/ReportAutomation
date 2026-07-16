@@ -29,6 +29,7 @@ OPTIONAL_DEFAULT = "N/A"
 def generate(*, template_path, company_name, company_logo_path,
              excel_path, working_dir, xml_path,
              config, damage_count=0, include_disclaimer=False, wellhead_damage=None,
+             fw16=False,
              well_name=None, well_type=None, btm_depth=None, field=None,
              log_date=None, orig_comp=None, last_wko=None,
              progress=None, review=None):
@@ -85,13 +86,16 @@ def generate(*, template_path, company_name, company_logo_path,
         # Damage present ⇒ " and Hotspots" (place the tag right after the word,
         # e.g. "Metal Loss{{hotspot}}"); no damage ⇒ nothing.
         "{{hotspot}}": " and Hotspots" if damage_count else "",
+        # Tool-type K-factors: FW16 uses a flat 1.2 set; the default otherwise.
+        "{{tool_type}}": ("(K1=1.2, K2=1.2, K3=1.2, K4=1.2)" if fw16
+                          else "(K1=0.45, K2=0.55, K3=0.7, K4=0.9)"),
     }
     if defaulted:
         notes.append(
             f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
         )
     # Auto-derived tags never nag if a template doesn't use them.
-    text_fields_quiet = {"{{delivery_date}}"}
+    text_fields_quiet = {"{{delivery_date}}", "{{hotspot}}", "{{tool_type}}"}
 
     # Company-conditional lines: kept only when that company is chosen.
     is_weatherford = (company_name or "").strip().lower() == "weatherford"
@@ -111,9 +115,13 @@ def generate(*, template_path, company_name, company_logo_path,
                 text_fields[tag] = val
                 text_fields_quiet.add(tag)
         # Casing / liner / tubing lists, largest first, ending with the type word
-        # (e.g. '18 5/8", 13 3/8", 9 5/8" casing strings').
+        # (e.g. '18 5/8", 13 3/8", 9 5/8" casing strings'). Tubings lead with
+        # "and " so they read as the last clause after the casing/liner lists.
         for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
-            text_fields[tag] = sizes_with_label(pipe_model, code)
+            val = sizes_with_label(pipe_model, code)
+            if code == "TBG" and val:
+                val = f"and {val}"
+            text_fields[tag] = val
             text_fields_quiet.add(tag)
         # Natural-language list of pipe types present, e.g. "tubing, liner and casing".
         text_fields["{{pipe_config}}"] = pipe_config_phrase(pipe_model)

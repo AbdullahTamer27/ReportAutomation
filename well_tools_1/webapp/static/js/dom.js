@@ -67,6 +67,7 @@ export const els = {
   damageCount: $("damageCount"),
   includeDisclaimer: $("includeDisclaimer"),
   wellheadDamage: $("wellheadDamage"),
+  fw16: $("fw16"),
   templateHint: $("templateHint"),
   companyHint: $("companyHint"),
   generate: $("generate"),

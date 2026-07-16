@@ -94,6 +94,7 @@ class GenerateRequest(BaseModel):
     btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
     field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
     wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
+    fw16: bool = Field(False, description="FW16 tool: use the flat 1.2 K-factor set for {{tool_type}} (else the default set)")
     xml_path: str | None = Field(None, description="WellSchematic XML; when given, the Raw Data sheet is (re)written into the data Excel")
 
 
@@ -676,6 +677,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             damage_count=req.damage_count,
             include_disclaimer=req.include_disclaimer,
             wellhead_damage=req.wellhead_damage,
+            fw16=req.fw16,
             well_name=req.well_name,
             well_type=req.well_type,
             btm_depth=req.btm_depth,

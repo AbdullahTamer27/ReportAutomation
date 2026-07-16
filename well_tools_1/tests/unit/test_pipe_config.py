@@ -123,3 +123,11 @@ def test_pipe_config_phrase(types, expected):
 def test_sizes_with_label(code, pipes, expected):
     model = [{"type": t, "sizes": [s]} for t, s in pipes]
     assert pc.sizes_with_label(model, code) == expected
+
+
+def test_parse_triple_taper():
+    pipes = pc.parse_config("4.5x3.5x2.875TBG-7LNR-9.625")
+    assert pipes[0]["sizes"] == [4.5, 3.5, 2.875]
+    assert pipes[0]["tapered"] is True
+    assert pipes[0]["suffix"] == '4 1/2" × 3 1/2" × 2 7/8" TBG'
+    assert pc.config_string_from_pipes(pipes).startswith("4.5x3.5x2.875TBG")

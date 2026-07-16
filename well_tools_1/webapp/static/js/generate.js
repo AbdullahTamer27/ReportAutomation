@@ -41,6 +41,7 @@ export async function generate() {
         btm_depth: els.btmDepth.value.trim() || null,
         field: els.fieldName.value.trim() || null,
         wellhead_damage: els.wellheadDamage.checked,
+        fw16: els.fw16.checked,
         xml_path: state.xmlPath || null,
         config: configValue() || null,
       }),
