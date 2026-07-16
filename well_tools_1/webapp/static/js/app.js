@@ -11,7 +11,7 @@ import {
 } from "./inputs.js";
 import { generate } from "./generate.js";
 import { tmPickFile, tmRegister, cmPickFile, cmRegister } from "./managers.js";
-import { pickGhostCsv, ghostMerge } from "./ghost.js";
+import { pickGhostCsv, ghostMerge, ghostMergeFolder } from "./ghost.js";
 import { checkForUpdates } from "./updater.js";
 
 // --- Mode selection + navigation --------------------------------------------
@@ -35,6 +35,7 @@ els.cmRegister.addEventListener("click", cmRegister);
 // --- Ghost Merger -----------------------------------------------------------
 els.pickGhostCsv.addEventListener("click", pickGhostCsv);
 els.ghostMerge.addEventListener("click", ghostMerge);
+els.ghostPickFolder.addEventListener("click", ghostMergeFolder);
 
 // --- Inputs view ------------------------------------------------------------
 els.openWellFolder.addEventListener("click", openWellFolder);

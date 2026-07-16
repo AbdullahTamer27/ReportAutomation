@@ -12,6 +12,7 @@ export const els = {
   pickGhostCsv: $("pickGhostCsv"),
   ghostCsvPath: $("ghostCsvPath"),
   ghostMerge: $("ghostMerge"),
+  ghostPickFolder: $("ghostPickFolder"),
   ghostStatus: $("ghostStatus"),
   ghostPreview: $("ghostPreview"),
   // report-automation sub-feature entry points (on the inputs view)

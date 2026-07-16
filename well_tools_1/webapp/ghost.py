@@ -113,6 +113,48 @@ def _load_csv(csv_path):
     return df
 
 
+def merge_ghost_folder(folder, ghost_collar_length):
+    """Run the ghost-collar merge on every Joint-Analysis ``.csv`` in `folder`,
+    writing a ``merged_*.xlsx`` beside each. One bad CSV is captured and never
+    aborts the batch. Returns a summary dict with a per-file ``results`` list.
+    Raises :class:`GhostInputError` for a missing folder or when it holds no CSVs."""
+    if not folder or not os.path.isdir(folder):
+        raise GhostInputError("Folder not found at that path.")
+    try:
+        ghost_collar_length = float(ghost_collar_length)
+    except (TypeError, ValueError):
+        raise GhostInputError("Ghost collar length must be a number.")
+    if ghost_collar_length <= 0:
+        raise GhostInputError("Ghost collar length must be greater than 0.")
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError as e:
+        raise GhostInputError(f"Cannot read the folder: {e}") from e
+
+    csvs = [n for n in names
+            if n.lower().endswith(".csv") and os.path.isfile(os.path.join(folder, n))]
+    if not csvs:
+        raise GhostInputError("No .csv files found in that folder.")
+
+    results = []
+    for name in csvs:
+        path = os.path.join(folder, name)
+        try:
+            r = merge_ghost_collars(path, ghost_collar_length)
+            results.append({"file": name, "ok": True, "output_path": r["output_path"],
+                            "input_rows": r["input_rows"], "output_rows": r["output_rows"],
+                            "merged_chains": r["merged_chains"], "error": None})
+        except Exception as e:  # noqa: BLE001 — capture per file, keep going
+            results.append({"file": name, "ok": False, "output_path": None,
+                            "input_rows": None, "output_rows": None,
+                            "merged_chains": None, "error": str(e)})
+
+    succeeded = sum(1 for r in results if r["ok"])
+    logger.info("Ghost folder merge: %s/%s ok in %s", succeeded, len(results), folder)
+    return {"folder": folder, "threshold": ghost_collar_length,
+            "succeeded": succeeded, "failed": len(results) - succeeded, "results": results}
+
+
 def _default_output_path(csv_path):
     base = os.path.basename(csv_path)
     stem = base[:-4] if base.lower().endswith(".csv") else base

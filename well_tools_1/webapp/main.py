@@ -51,7 +51,7 @@ from .registry import (  # noqa: E402
 from .config import TEMPLATES_DIR, ensure_user_data  # noqa: E402
 from .preview import generate_preview, PreviewError, OUTPUTS_DIR, PREVIEW_DPI  # noqa: E402
 from .interval import generate_raw_data, generate_raw_data_file, IntervalInputError  # noqa: E402
-from .ghost import merge_ghost_collars, GhostInputError  # noqa: E402
+from .ghost import merge_ghost_collars, merge_ghost_folder, GhostInputError  # noqa: E402
 
 from well_tools.report.pipe_config import (  # noqa: E402
     build_pipe_model, ConfigParseError, deepest_point_from_xml, format_depth,
@@ -239,6 +239,29 @@ class GhostResponse(BaseModel):
     output_rows: int
     merged_chains: int
     preview: str
+
+
+class GhostFolderRequest(BaseModel):
+    folder_path: str = Field(..., description="Folder holding Joint-Analysis .csv files")
+    ghost_collar_length: float = Field(3.0, gt=0, description="Merge collars >= this length (ft)")
+
+
+class GhostFolderItem(BaseModel):
+    file: str
+    ok: bool
+    output_path: str | None = None
+    input_rows: int | None = None
+    output_rows: int | None = None
+    merged_chains: int | None = None
+    error: str | None = None
+
+
+class GhostFolderResponse(BaseModel):
+    folder: str
+    threshold: float
+    succeeded: int
+    failed: int
+    results: list[GhostFolderItem]
 
 
 class IntervalResponse(BaseModel):
@@ -471,6 +494,23 @@ def ghost_merge(req: GhostRequest):
         logger.exception("Ghost merge failed")
         raise HTTPException(status_code=500, detail=f"Ghost merge failed: {e}")
     return GhostResponse(**result)
+
+
+@app.post("/api/ghost/merge-folder", response_model=GhostFolderResponse)
+def ghost_merge_folder(req: GhostFolderRequest):
+    """Batch Ghost Merger: run the merge on every Joint-Analysis .csv in a folder,
+    writing a merged_*.xlsx beside each. One bad file doesn't stop the rest."""
+    logger.info("Ghost folder merge | folder=%s | threshold=%s",
+                req.folder_path, req.ghost_collar_length)
+    try:
+        result = merge_ghost_folder(req.folder_path, req.ghost_collar_length)
+    except GhostInputError as e:
+        logger.warning("Ghost folder input error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Ghost folder merge failed")
+        raise HTTPException(status_code=500, detail=f"Ghost folder merge failed: {e}")
+    return GhostFolderResponse(**result)
 
 
 def _template_to_dict(t: Template) -> dict:
