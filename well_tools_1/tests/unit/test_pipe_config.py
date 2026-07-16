@@ -111,3 +111,15 @@ def test_pipes_from_xml_taper_in_one_pipeset_stays_one_pipe(tmp_path):
 ])
 def test_pipe_config_phrase(types, expected):
     assert pc.pipe_config_phrase([{"type": t} for t in types]) == expected
+
+
+@pytest.mark.parametrize("code, pipes, expected", [
+    ("CSG", [("CSG", 18.625), ("CSG", 13.375), ("CSG", 9.625)],
+     '18 5/8", 13 3/8", 9 5/8" casing strings'),           # plural, largest first
+    ("TBG", [("TBG", 4.5)], '4 1/2" tubing string'),        # singular
+    ("CSG", [("CSG", 9.625)], '9 5/8" casing string'),      # singular
+    ("LNR", [("CSG", 9.625)], ""),                          # none of that type
+])
+def test_sizes_with_label(code, pipes, expected):
+    model = [{"type": t, "sizes": [s]} for t, s in pipes]
+    assert pc.sizes_with_label(model, code) == expected

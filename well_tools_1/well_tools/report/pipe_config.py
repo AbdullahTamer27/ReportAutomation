@@ -328,6 +328,23 @@ def sizes_list_string(pipes, type_code):
     return ", ".join(_sizes_label(p["sizes"]) for p in pipes_of_type(pipes, type_code))
 
 
+def sizes_with_label(pipes, type_code):
+    """Like :func:`sizes_list_string`, but with the type word appended, pluralised
+    by count:
+
+        3 casings -> '18 5/8", 13 3/8", 9 5/8" casing strings'
+        1 tubing  -> '4 1/2" tubing string'
+
+    Empty string when there are none of that type. Backs {{casings}} / {{liners}}
+    / {{tubings}}."""
+    matched = pipes_of_type(pipes, type_code)
+    if not matched:
+        return ""
+    sizes = ", ".join(_sizes_label(p["sizes"]) for p in matched)
+    word = TYPE_FULL[type_code].lower()                     # casing / liner / tubing
+    return f"{sizes} {word} {'string' if len(matched) == 1 else 'strings'}"
+
+
 def pipe_config_phrase(pipes):
     """Natural-language list of the pipe *types* present, de-duplicated and
     ordered inside-out (tubing, then liner, then casing).

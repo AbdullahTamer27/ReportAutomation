@@ -17,7 +17,7 @@ from datetime import datetime
 
 from well_tools.report.report_builder import build_automation_report  # noqa: F401
 from well_tools.report.pipe_config import (
-    build_pipe_model, ConfigParseError, sizes_list_string, pipe_config_phrase,  # noqa: F401
+    build_pipe_model, ConfigParseError, sizes_with_label, pipe_config_phrase,  # noqa: F401
 )
 
 from .naming import normalize_date, safe_filename, report_filename
@@ -110,9 +110,10 @@ def generate(*, template_path, company_name, company_logo_path,
                 tag = f"{{{{{role}_{key}}}}}"
                 text_fields[tag] = val
                 text_fields_quiet.add(tag)
-        # Casing / liner / tubing size lists (sizes only, largest first).
+        # Casing / liner / tubing lists, largest first, ending with the type word
+        # (e.g. '18 5/8", 13 3/8", 9 5/8" casing strings').
         for tag, code in (("{{casings}}", "CSG"), ("{{liners}}", "LNR"), ("{{tubings}}", "TBG")):
-            text_fields[tag] = sizes_list_string(pipe_model, code)
+            text_fields[tag] = sizes_with_label(pipe_model, code)
             text_fields_quiet.add(tag)
         # Natural-language list of pipe types present, e.g. "tubing, liner and casing".
         text_fields["{{pipe_config}}"] = pipe_config_phrase(pipe_model)
