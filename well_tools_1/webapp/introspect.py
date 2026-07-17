@@ -17,7 +17,7 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from .field_registry import (
-    USER_FIELDS, user_fields, as_dicts, is_non_user_tag, generic_field,
+    USER_FIELDS, user_fields, as_dicts, is_non_user_tag, generic_field, controls_state,
 )
 
 _TAG = re.compile(r"\{\{[^{}]+\}\}")
@@ -46,13 +46,15 @@ def extract_tags(docx_path):
     return tags
 
 
-def template_fields(docx_path):
-    """The form fields to render for `docx_path`: registry user fields whose tag
-    the template contains (in registry order), then generic text boxes for any
-    unknown user-ish tags. Serialised as dicts for /api/fields."""
+def template_form(docx_path):
+    """The whole form for `docx_path`: ``{"fields": [...], "controls": [...]}``.
+
+    Fields = registry user fields whose tag the template contains (in registry
+    order) + generic text boxes for unknown user-ish tags. Controls = per-control
+    visibility (checkboxes / damage count shown only when their tag is present)."""
     tags = extract_tags(docx_path)
     known = {f.tag for f in USER_FIELDS}
     present = [f for f in user_fields() if f.tag in tags]
     extras = [generic_field(t) for t in sorted(tags)
               if t not in known and not is_non_user_tag(t)]
-    return as_dicts(present + extras)
+    return {"fields": as_dicts(present + extras), "controls": controls_state(tags)}

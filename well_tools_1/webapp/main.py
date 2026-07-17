@@ -323,13 +323,14 @@ def fields(template_id: int | None = None, db: Session = Depends(get_db)):
     """The user-input fields to render (Epic C). With no `template_id`, the full
     registry; with one, only the fields whose tags that template contains
     (introspection) — so each report shows exactly the fields it needs."""
-    from .field_registry import user_fields, as_dicts
+    from .field_registry import user_fields, as_dicts, controls_state
     if template_id is not None:
         t = db.get(Template, template_id)
         if t and t.file_path and os.path.isfile(t.file_path):
-            from .introspect import template_fields
-            return {"fields": template_fields(t.file_path)}
-    return {"fields": as_dicts(user_fields())}
+            from .introspect import template_form
+            return template_form(t.file_path)
+    # No template chosen → full registry, all controls shown.
+    return {"fields": as_dicts(user_fields()), "controls": controls_state()}
 
 
 @app.get("/api/update/check")

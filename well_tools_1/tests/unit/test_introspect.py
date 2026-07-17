@@ -2,7 +2,7 @@
 
 from docx import Document
 
-from webapp.introspect import extract_tags, template_fields
+from webapp.introspect import extract_tags, template_form
 
 
 def _make(tmp_path, body_runs=None, cell_text=None, header_text=None):
@@ -40,7 +40,7 @@ def test_template_fields_filters_and_orders(tmp_path):
         "{{log_date}} {{well_name}} {{SUMMARY}} {{pie_firstPipe}} "
         "{{firstPipe_name}} {{casings}} {{tool_type}} {{block}}"
     ])
-    fields = template_fields(p)
+    fields = template_form(p)["fields"]
     keys = [f["key"] for f in fields]
     # registry user fields present, in registry order (well_name before log_date),
     # then the unknown user tag as a generic text box.
@@ -55,7 +55,7 @@ def test_template_fields_filters_and_orders(tmp_path):
 
 def test_template_with_no_metadata_tags_yields_no_fields(tmp_path):
     p = _make(tmp_path, body_runs=["{{SUMMARY}} {{pie_thirdPipe}} {{DMG1_1}} {{INTERVALS}}"])
-    assert template_fields(p) == []
+    assert template_form(p)["fields"] == []
 
 
 def test_saudi_style_template_shows_all_seven(tmp_path):
@@ -63,6 +63,24 @@ def test_saudi_style_template_shows_all_seven(tmp_path):
         "{{well_name}} {{field}} {{well_type}} {{btm_depth}} "
         "{{log_date}} {{orig_comp}} {{last_wko}}"
     ])
-    keys = [f["key"] for f in template_fields(p)]
+    keys = [f["key"] for f in template_form(p)["fields"]]
     assert keys == ["well_name", "field", "well_type", "btm_depth",
                     "log_date", "orig_comp", "last_wko"]
+
+
+def _controls(form):
+    return {c["key"]: c["present"] for c in form["controls"]}
+
+
+def test_controls_gated_on_their_tags(tmp_path):
+    # Template drives only the disclaimer and FW16 (tool_type); no damage / wellhead.
+    p = _make(tmp_path, body_runs=["{{well_name}} {{DISC}} {{tool_type}}"])
+    ctl = _controls(template_form(p))
+    assert ctl == {"damage_count": False, "include_disclaimer": True,
+                   "wellhead_damage": False, "fw16": True}
+
+
+def test_all_controls_when_template_uses_them(tmp_path):
+    p = _make(tmp_path, body_runs=[
+        "{{DISC}} {{ovl_wellhead}} {{tool_type}} {{damage_block_start}}"])
+    assert all(template_form(p)["controls"][i]["present"] for i in range(4))

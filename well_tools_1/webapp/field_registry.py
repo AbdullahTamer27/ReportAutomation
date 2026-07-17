@@ -60,6 +60,35 @@ def user_fields():
     return [f for f in USER_FIELDS if f.source == "user"]
 
 
+@dataclass(frozen=True)
+class Control:
+    """A non-text form control (checkbox / damage count) that only makes sense
+    when the template contains its `tag`. `section_id` is the HTML section the
+    form shows/hides. Values still flow to the backend as their existing flags."""
+    key: str            # payload flag key (damage_count, include_disclaimer, …)
+    section_id: str     # id of the <section> to show/hide
+    tag: str            # controlling tag; present in the template ⇒ show the control
+
+
+# Controls hardcoded in index.html, each gated on the tag it drives.
+CONTROLS = (
+    Control("damage_count", "ctl-damage", "{{damage_block_start}}"),
+    Control("include_disclaimer", "ctl-disclaimer", "{{DISC}}"),
+    Control("wellhead_damage", "ctl-wellhead", "{{ovl_wellhead}}"),
+    Control("fw16", "ctl-fw16", "{{tool_type}}"),
+)
+
+
+def controls_state(tags=None):
+    """Per-control visibility: ``[{key, section_id, present}]``. With no `tags`
+    (no template chosen) every control is shown, as before."""
+    return [
+        {"key": c.key, "section_id": c.section_id,
+         "present": True if tags is None else (c.tag in tags)}
+        for c in CONTROLS
+    ]
+
+
 def as_dicts(fields):
     """Serialise fields for the /api/fields response the frontend renders from."""
     return [asdict(f) for f in fields]

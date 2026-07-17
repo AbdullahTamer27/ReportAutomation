@@ -6,6 +6,7 @@
 import { escapeHtml } from "./dom.js";
 
 let FIELDS = [];
+let CONTROLS = [];   // [{key, section_id, present}] — checkbox/damage-count gating
 
 export async function loadFields(templateId) {
   const url = templateId
@@ -15,10 +16,23 @@ export async function loadFields(templateId) {
     const res = await fetch(url);
     const data = await res.json();
     FIELDS = (data && data.fields) || [];
+    CONTROLS = (data && data.controls) || [];
   } catch (_e) {
     FIELDS = [];
+    CONTROLS = [];
   }
   return FIELDS;
+}
+
+// Show/hide the non-text controls (disclaimer, well-head, FW16, damage count)
+// based on whether the chosen template contains each one's tag.
+function applyControls() {
+  for (const c of CONTROLS) {
+    const sec = document.getElementById(c.section_id);
+    // Inline display (not the `hidden` attribute): `.field { display:flex }` is a
+    // class selector and would otherwise beat `[hidden]`'s display:none.
+    if (sec) sec.style.display = c.present ? "" : "none";
+  }
 }
 
 // Re-render the form for a template (or the full registry when templateId is
@@ -27,6 +41,7 @@ export async function refreshFields(container, templateId) {
   const prev = collectFields();          // capture current values (old FIELDS)
   await loadFields(templateId);          // FIELDS now matches the template
   renderFields(container);
+  applyControls();                       // show/hide checkboxes + damage count
   for (const f of FIELDS) {
     const v = prev[f.key];
     if (v != null && v !== "") {
