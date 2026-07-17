@@ -27,13 +27,21 @@ class GhostInputError(Exception):
     """Raised when the CSV input or threshold is missing or invalid."""
 
 
-def _get_max_loss(row):
-    """Display value for MaxLoss%: the Comment text if present, else the number.
-    (Ranking always uses the numeric MaxLoss%; this only affects what is shown.)"""
+def _comment_or(row, fallback):
+    """Display value for a measurement column: `row`'s Comment text when it has
+    one, else `fallback`.
+
+    An annotated joint shows its note in place of EVERY measurement it reports
+    (MaxLoss%, DptMxLos, TMin) — the numbers still drive ranking/aggregation,
+    the comment only changes what is written out.
+
+    `fallback` is passed in rather than read off `row` because a merged chain's
+    TMin is the chain MINIMUM, not the best row's own value — so the comment has
+    to override the aggregate, not replace the lookup."""
     comment = row.get("Comment", None)
     if comment is not None and str(comment).strip() not in ("", "nan", "None", "NaN"):
         return comment
-    return row["MaxLoss%"]
+    return fallback
 
 
 def merge_ghost_by_single_file(df, ghost_collar_length):
@@ -61,29 +69,28 @@ def merge_ghost_by_single_file(df, ghost_collar_length):
         if merged:
             merge_group = df.iloc[i:j + 1]
             best_row = merge_group.loc[merge_group["MaxLoss%"].idxmax()]
-            max_loss_val = _get_max_loss(best_row)
-
             merged_rows.append({
                 "Top": merge_group.iloc[0]["Top"],
                 "Bottom": merge_group.iloc[-1]["Bottom"],
                 "Length": merge_group.iloc[-1]["Bottom"] - merge_group.iloc[0]["Top"],
                 "TNom": merge_group.iloc[0]["TNom"],
-                "TMin": merge_group["TMin"].min(),
-                "DptMxLos": best_row["DptMxLos"],
-                "MaxLoss%": max_loss_val,
+                # TMin stays the chain minimum; an annotated worst joint overrides
+                # the display of all three measurements, exactly like MaxLoss%.
+                "TMin": _comment_or(best_row, merge_group["TMin"].min()),
+                "DptMxLos": _comment_or(best_row, best_row["DptMxLos"]),
+                "MaxLoss%": _comment_or(best_row, best_row["MaxLoss%"]),
                 "Source": "merged (ghost collar chain)",
             })
             i = j + 1
         else:
-            max_loss_val = _get_max_loss(current)
             merged_rows.append({
                 "Top": current["Top"],
                 "Bottom": current["Bottom"],
                 "Length": current["Bottom"] - current["Top"],
                 "TNom": current["TNom"],
-                "TMin": current["TMin"],
-                "DptMxLos": current["DptMxLos"],
-                "MaxLoss%": max_loss_val,
+                "TMin": _comment_or(current, current["TMin"]),
+                "DptMxLos": _comment_or(current, current["DptMxLos"]),
+                "MaxLoss%": _comment_or(current, current["MaxLoss%"]),
                 "Source": "original",
             })
             i += 1
@@ -144,7 +151,7 @@ def merge_ghost_folder(folder, ghost_collar_length):
             results.append({"file": name, "ok": True, "output_path": r["output_path"],
                             "input_rows": r["input_rows"], "output_rows": r["output_rows"],
                             "merged_chains": r["merged_chains"], "error": None})
-        except Exception as e:  # noqa: BLE001 — capture per file, keep going
+        except Exception as e:  
             results.append({"file": name, "ok": False, "output_path": None,
                             "input_rows": None, "output_rows": None,
                             "merged_chains": None, "error": str(e)})

@@ -202,3 +202,81 @@ reverse-engineer — accepted).
    unit-test the manifest/version/hash/cached-kill logic.
 5. **P3 (Nuitka)** — evaluate once the pipeline works; only if you want the extra
    deterrent.
+
+---
+
+# Epic C — Template-agnostic input form
+
+## The problem (in one line)
+The second screen (the input form) is hardcoded for the **Saudi** report. Other
+reports (e.g. **Oman**) need *different* fields — some Saudi fields don't apply,
+some new ones do. Piling every possible field into one form makes it giant and
+tedious: you'd have to *know* which fields each report actually uses.
+
+## The idea (simply)
+**Let the template decide the form.**
+
+A report template already says what it needs — by the `{{tags}}` it contains. A
+template with `{{log_date}}` needs a log date; one without it doesn't. So instead
+of a fixed form, when you pick a template the app **reads its tags and shows
+exactly those fields — nothing more.**
+
+A small **registry** in code says *how* each tag should look — `{{log_date}}` is a
+date picker, `{{well_name}}` is a text box, `{{orig_comp}}` is a date, etc. If the
+template uses a tag the registry doesn't know yet, it just shows a plain labelled
+text box, so a brand-new report works immediately and you enrich the registry
+later.
+
+> Think of it as a form that **assembles itself** from a checklist the document
+> hands it — rather than one fixed form everyone has to squint at.
+
+## Locked decisions
+1. **Source of truth = the template itself** (introspection — scan its tags).
+2. **Fields are authored in code** (a registry file), by a technical maintainer —
+   not an in-app UI.
+3. **Rich fields** — typed inputs (dates, numbers, selects), required markers, and
+   groups, like today's Saudi form.
+
+## Two zones on the form
+- **Core controls** *(always shown)* — engine inputs, NOT template text tags: file/
+  folder pickers, configuration, company, damage count, disclaimer / well-head /
+  FW16 toggles. Unchanged.
+- **Dynamic metadata fields** *(template-driven)* — the text-tag fields
+  (`{{well_name}}`, `{{log_date}}`, `{{field}}`, …). This is the part that adapts.
+
+## Three pieces to build
+1. **Field registry** — one entry per tag: `tag, label, type (text|date|number|
+   select|checkbox), group, source (user|derived|engine), required, validation,
+   default, order`.
+   - `source=user` → a form input.
+   - `source=derived` → computed from config/XML/schematic (e.g. `{{casings}}`,
+     `{{btm_depth}}`) — shown read-only/prefilled or hidden.
+   - `source=engine` → never a form field (`{{INTERVALS}}`, `{{pie_*}}`,
+     `{{DMGi_j}}`, `{{ovl_*}}`).
+2. **Introspection** — on template selection, scan the `.docx` (**body + tables +
+   headers/footers + overlay text-boxes** — tags live in all of these) for every
+   `{{tag}}`, intersect with the registry, render the user fields, compute the
+   derived ones, ignore engine ones; unknown tags → generic labelled text box.
+3. **Backend generalisation** — `report_service` stops using the fixed named
+   params and builds `text_fields` generically from registry + submitted values +
+   derivers. Registry becomes the single source of truth for form *and* assembly.
+
+## Phases (each provable by goldens — Saudi output never changes until C3)
+- [ ] **C1 — Registry + form from registry.** Author registry for today's Saudi
+      tags; render the current form from it. Same fields, same output.
+- [ ] **C2 — Backend reads registry.** Build `text_fields` from the registry
+      generically (still all Saudi fields). Goldens unchanged.
+- [ ] **C3 — Introspection on.** Form shows only the tags the chosen template
+      contains → the Oman template with a different tag set now "just works."
+- [ ] **C4 — Polish.** Groups / order / required from the registry; conditional
+      fields (show/hide based on another field) only if a real report needs them.
+
+## Open decisions (pin before C1)
+- **Required-per-template** — start with `required` global-per-tag in the registry;
+  add per-template overrides only if a tag is required in one report, optional in
+  another.
+- **Derived-tag ownership** — each deriver (config→pipe tags, XML→depth,
+  schematic→dates) registers the tag(s) it produces, so introspection only runs the
+  derivers whose tags appear in the template.
+- **Unknown-tag default** — plain text input, labelled from the tag name (safe
+  degradation; never blocks a new template).
