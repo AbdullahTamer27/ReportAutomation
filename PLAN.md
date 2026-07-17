@@ -262,11 +262,11 @@ later.
    derivers. Registry becomes the single source of truth for form *and* assembly.
 
 ## Phases (each provable by goldens — Saudi output never changes until C3)
-- [ ] **C1 — Registry + form from registry.** Author registry for today's Saudi
+- [x] **C1 — Registry + form from registry.** Author registry for today's Saudi
       tags; render the current form from it. Same fields, same output.
-- [ ] **C2 — Backend reads registry.** Build `text_fields` from the registry
+- [x] **C2 — Backend reads registry.** Build `text_fields` from the registry
       generically (still all Saudi fields). Goldens unchanged.
-- [ ] **C3 — Introspection on.** Form shows only the tags the chosen template
+- [x] **C3 — Introspection on.** Form shows only the tags the chosen template
       contains → the Oman template with a different tag set now "just works."
 - [ ] **C4 — Polish.** Groups / order / required from the registry; conditional
       fields (show/hide based on another field) only if a real report needs them.
