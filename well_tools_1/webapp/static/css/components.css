@@ -61,6 +61,18 @@ select:focus, .text-input:focus {
 }
 .text-input::placeholder { color: var(--muted); }
 
+/* Required-field marker + empty-required highlight (Epic C4). */
+.req {
+  color: var(--error-fg);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.text-input.field-error {
+  border-color: var(--error-fg);
+  box-shadow: 0 0 0 3px var(--error-bg);
+}
+
 /* A field auto-filled by Talos (schematic/XML) — bronze until reviewed/edited. */
 .text-input.prefilled {
   border-color: var(--bronze);

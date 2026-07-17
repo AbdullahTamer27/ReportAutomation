@@ -36,3 +36,17 @@ def test_layout_widths_reproduce_pairs():
 def test_as_dicts_is_serialisable():
     ds = fr.as_dicts(fr.user_fields())
     assert all(isinstance(d, dict) and "tag" in d and "dom_id" in d for d in ds)
+
+
+def test_fields_serialise_group_and_required():
+    # C4: every serialised field carries its group + required flag for the form.
+    for d in fr.as_dicts(fr.user_fields()):
+        assert d["group"] == "Optional details"
+        assert d["required"] is False
+
+
+def test_generic_field_is_optional_in_default_group():
+    g = fr.generic_field("{{block}}")
+    assert g.required is False
+    assert g.group == "Optional details"
+    assert g.label == "Block"

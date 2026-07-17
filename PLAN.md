@@ -268,7 +268,7 @@ later.
       generically (still all Saudi fields). Goldens unchanged.
 - [x] **C3 — Introspection on.** Form shows only the tags the chosen template
       contains → the Oman template with a different tag set now "just works."
-- [ ] **C4 — Polish.** Groups / order / required from the registry; conditional
+- [~] **C4 — Polish (required + groups done; date-pickers/conditional deferred).** Groups / order / required from the registry; conditional
       fields (show/hide based on another field) only if a real report needs them.
 
 ## Open decisions (pin before C1)

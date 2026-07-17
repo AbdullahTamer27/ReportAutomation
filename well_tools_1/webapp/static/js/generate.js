@@ -4,7 +4,7 @@ import { $, els, escapeHtml, hide, pyapi } from "./dom.js";
 import { state } from "./state.js";
 import { resolveTemplate, resolveCompany, configValue } from "./registry.js";
 import { damageCountValue } from "./config.js";
-import { collectFields } from "./fields.js";
+import { collectFields, missingRequired } from "./fields.js";
 
 export async function generate() {
   const template = resolveTemplate();
@@ -15,6 +15,11 @@ export async function generate() {
   const workingDir = els.workingDirInput.value.trim();
   if (!state.excelPath) return showError("Excel data file is missing — go back and choose one.");
   if (!workingDir) return showError("Working directory is missing — go back and set one.");
+  const miss = missingRequired();
+  if (miss.length) {
+    return showError(`Please fill required field${miss.length > 1 ? "s" : ""}: `
+      + miss.map((f) => f.label).join(", ") + ".");
+  }
 
   setLoading(true);
   showInfo("Generating report…");

@@ -55,26 +55,23 @@ function fieldSection(f) {
   const sec = document.createElement("section");
   sec.className = "field";
   const cls = "text-input" + (f.mono ? " mono" : "");
-  const opt = f.required ? "" : ' <span class="opt">(optional)</span>';
+  const mark = f.required
+    ? ' <span class="req" aria-hidden="true">*</span>'
+    : ' <span class="opt">(optional)</span>';
   sec.innerHTML =
-    `<label for="${f.dom_id}">${escapeHtml(f.label)}${opt}</label>` +
-    `<input type="text" id="${f.dom_id}" class="${cls}" ` +
+    `<label for="${f.dom_id}">${escapeHtml(f.label)}${mark}</label>` +
+    `<input type="text" id="${f.dom_id}" class="${cls}"${f.required ? " aria-required=\"true\"" : ""} ` +
     `placeholder="${escapeHtml(f.placeholder || "")}" autocomplete="off" />`;
-  // Auto-fill highlight clears once the user edits the field themselves.
+  // Auto-fill / error highlights clear once the user edits the field themselves.
   const input = sec.querySelector("input");
-  input.addEventListener("input", () => input.classList.remove("prefilled"));
+  input.addEventListener("input", () => input.classList.remove("prefilled", "field-error"));
   return sec;
 }
 
-// Render the fields into `container`, pairing consecutive half-width fields into
-// a .field-row (reproducing today's side-by-side layout).
-export function renderFields(container) {
-  if (!container) return;
-  container.innerHTML = "";
+function pairInto(container, fs) {
   let i = 0;
-  while (i < FIELDS.length) {
-    const f = FIELDS[i];
-    const next = FIELDS[i + 1];
+  while (i < fs.length) {
+    const f = fs[i], next = fs[i + 1];
     if (f.width === "half" && next && next.width === "half") {
       const row = document.createElement("div");
       row.className = "field-row";
@@ -86,6 +83,42 @@ export function renderFields(container) {
       i += 1;
     }
   }
+}
+
+// Render the fields into `container`, one section-label heading per group (in
+// first-seen order), pairing consecutive half-width fields within each group.
+export function renderFields(container) {
+  if (!container) return;
+  container.innerHTML = "";
+  const order = [];
+  const byGroup = new Map();
+  for (const f of FIELDS) {
+    if (!byGroup.has(f.group)) { byGroup.set(f.group, []); order.push(f.group); }
+    byGroup.get(f.group).push(f);
+  }
+  for (const g of order) {
+    if (g) {
+      const h = document.createElement("p");
+      h.className = "section-label";
+      h.textContent = g;
+      container.appendChild(h);
+    }
+    pairInto(container, byGroup.get(g));
+  }
+}
+
+// Required fields left empty — for the Generate guard. Also flags them red.
+export function missingRequired() {
+  const missing = [];
+  for (const f of FIELDS) {
+    if (!f.required) continue;
+    const el = document.getElementById(f.dom_id);
+    if (!el || !el.value.trim()) {
+      if (el) el.classList.add("field-error");
+      missing.push(f);
+    }
+  }
+  return missing;
 }
 
 export function fieldInput(key) {
