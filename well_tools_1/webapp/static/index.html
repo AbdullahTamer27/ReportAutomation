@@ -296,45 +296,9 @@
           <input type="number" id="damageCount" class="text-input" min="0" step="1" value="0" />
           <p id="damageCountHint" class="hint"></p>
         </section>
-        <!-- Optional details -->
+        <!-- Optional details — rendered from the field registry (/api/fields) -->
         <p class="section-label">Optional details</p>
-
-        <section class="field">
-          <label for="wellName">Well name <span class="opt">(optional)</span></label>
-          <input type="text" id="wellName" class="text-input" placeholder="e.g. HRDH-1702" />
-        </section>
-
-        <div class="field-row">
-          <section class="field">
-            <label for="fieldName">Field <span class="opt">(optional)</span></label>
-            <input type="text" id="fieldName" class="text-input" placeholder="e.g. Zuluf" />
-          </section>
-          <section class="field">
-            <label for="wellType">Well type <span class="opt">(optional)</span></label>
-            <input type="text" id="wellType" class="text-input" placeholder="e.g. Oil producer" />
-          </section>
-        </div>
-
-        <section class="field">
-          <label for="btmDepth">Bottom depth <span class="opt">(optional)</span></label>
-          <input type="text" id="btmDepth" class="text-input mono" placeholder="e.g. 7233 ft" />
-        </section>
-
-        <div class="field-row">
-          <section class="field">
-            <label for="logDate">Log date <span class="opt">(optional)</span></label>
-            <input type="text" id="logDate" class="text-input mono" placeholder="e.g. 09-Sep-2020" />
-          </section>
-          <section class="field">
-            <label for="origComp">Original completion <span class="opt">(optional)</span></label>
-            <input type="text" id="origComp" class="text-input mono" placeholder="e.g. 26-Apr-1988" />
-          </section>
-        </div>
-
-        <section class="field">
-          <label for="lastWko">Last workover <span class="opt">(optional)</span></label>
-          <input type="text" id="lastWko" class="text-input mono" placeholder="e.g. 03-Mar-2024 (or N/A)" />
-        </section>
+        <div id="metaFields"></div>
 
         <section class="field">
           <label class="checkbox-row">

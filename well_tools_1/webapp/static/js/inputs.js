@@ -4,6 +4,7 @@
 import { els, pyapi, basename, hide, escapeHtml } from "./dom.js";
 import { state } from "./state.js";
 import { deriveConfigFromXml, computeDamageCount, previewConfig } from "./config.js";
+import { setFieldValue } from "./fields.js";
 import { ensureCompanies, resolveTemplate, refreshTemplateHint } from "./registry.js";
 import { showView } from "./nav.js";
 
@@ -96,12 +97,8 @@ export async function pickXmlReport() {
 }
 
 // --- Load optional fields from a well-schematic PDF -------------------------
-export const SCHEMATIC_FIELDS = {   // response key -> input element
-  well_name: "wellName",
-  well_type: "wellType",
-  orig_comp: "origComp",
-  last_wko: "lastWko",
-};
+// Registry keys the schematic PDF can pre-fill (the parser returns these keys).
+export const SCHEMATIC_FIELDS = ["well_name", "well_type", "orig_comp", "last_wko"];
 
 function schematicHintMsg(text, warn) {
   els.schematicHint.textContent = text;
@@ -130,12 +127,9 @@ export async function loadSchematicFromPath(path) {
     if (!res.ok) return schematicHintMsg(data.detail || `Parse failed (HTTP ${res.status})`, true);
 
     const filled = [];
-    for (const [key, elId] of Object.entries(SCHEMATIC_FIELDS)) {
+    for (const key of SCHEMATIC_FIELDS) {
       const val = data.fields ? data.fields[key] : undefined;
-      if (val) {
-        const input = els[elId];
-        input.value = val;
-        input.classList.add("prefilled");        // highlight for review
+      if (val && setFieldValue(key, val)) {       // sets value + bronze highlight
         filled.push(key.replace("_", " "));
       }
     }

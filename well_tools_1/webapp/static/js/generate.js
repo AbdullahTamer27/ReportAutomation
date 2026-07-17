@@ -4,6 +4,7 @@ import { $, els, escapeHtml, hide, pyapi } from "./dom.js";
 import { state } from "./state.js";
 import { resolveTemplate, resolveCompany, configValue } from "./registry.js";
 import { damageCountValue } from "./config.js";
+import { collectFields } from "./fields.js";
 
 export async function generate() {
   const template = resolveTemplate();
@@ -30,20 +31,15 @@ export async function generate() {
         template_id: template.id,
         excel_path: state.excelPath,
         working_dir: workingDir,
-        well_name: els.wellName.value.trim() || null,
         damage_count: damageCountValue(),
         company_id: company.id,
         include_disclaimer: els.includeDisclaimer.checked,
-        log_date: els.logDate.value.trim() || null,
-        orig_comp: els.origComp.value.trim() || null,
-        last_wko: els.lastWko.value.trim() || null,
-        well_type: els.wellType.value.trim() || null,
-        btm_depth: els.btmDepth.value.trim() || null,
-        field: els.fieldName.value.trim() || null,
         wellhead_damage: els.wellheadDamage.checked,
         fw16: els.fw16.checked,
         xml_path: state.xmlPath || null,
         config: configValue() || null,
+        // metadata fields (well_name, field, dates, …) from the registry-driven form
+        ...collectFields(),
       }),
     });
 

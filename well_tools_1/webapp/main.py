@@ -321,6 +321,14 @@ def health():
     return {"status": "ok", "version": current_version()}
 
 
+@app.get("/api/fields")
+def fields():
+    """The report's user-input fields (Epic C). The form renders itself from this
+    registry so field definitions live in exactly one place."""
+    from .field_registry import user_fields, as_dicts
+    return {"fields": as_dicts(user_fields())}
+
+
 @app.get("/api/update/check")
 def update_check():
     """Launch decision from the control manifest (update / required / blocked)."""

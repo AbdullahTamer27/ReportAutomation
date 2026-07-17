@@ -7,8 +7,9 @@ import { ensureTemplates, refreshTemplateHint, refreshCompanyHint } from "./regi
 import { scheduleConfigPreview } from "./config.js";
 import {
   openWellFolder, pickExcel, browseFolder, pickXmlReport, pickSchematic, toWorkspace,
-  inputsError, SCHEMATIC_FIELDS,
+  inputsError,
 } from "./inputs.js";
+import { loadFields, renderFields } from "./fields.js";
 import { generate } from "./generate.js";
 import { tmPickFile, tmRegister, cmPickFile, cmRegister } from "./managers.js";
 import { pickGhostCsv, ghostMerge, ghostMergeFolder } from "./ghost.js";
@@ -52,21 +53,16 @@ els.configInput.addEventListener("input", () => els.configInput.classList.remove
 els.company.addEventListener("change", refreshCompanyHint);
 els.generate.addEventListener("click", generate);
 
-// Auto-fill highlights clear once the user edits the field themselves.
-if (els.btmDepth) {
-  els.btmDepth.addEventListener("input", () => els.btmDepth.classList.remove("prefilled"));
-}
+// Damage count clears its own auto-fill highlight (registry fields handle their
+// own clear-on-edit inside fields.js when rendered).
 els.damageCount.addEventListener("input", () => {
   els.damageCount.classList.remove("prefilled");
   els.damageCountHint.textContent = "";
 });
-for (const elId of Object.values(SCHEMATIC_FIELDS)) {
-  const input = els[elId];
-  if (input) input.addEventListener("input", () => input.classList.remove("prefilled"));
-}
 
 // --- Boot -------------------------------------------------------------------
 showView("mode");
+loadFields().then(() => renderFields(els.metaFields));   // build the metadata form
 checkForUpdates();   // non-blocking: banner / required modal / blocked screen
 
 // Show the running version beside the brand name (from the local server).

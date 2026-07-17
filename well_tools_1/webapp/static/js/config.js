@@ -4,6 +4,7 @@
 import { els, escapeHtml } from "./dom.js";
 import { state } from "./state.js";
 import { configValue, updateGenerateEnabled } from "./registry.js";
+import { fieldInput } from "./fields.js";
 
 // --- Configuration preview --------------------------------------------------
 let _cfgTimer = null;
@@ -80,10 +81,11 @@ function renderConfigPreview(data) {
   updateGenerateEnabled();
   if (state.configOk) computeDamageCount();   // refresh the auto damage count
   // Auto-fill Bottom depth from the XML's deepest point (until the user edits it).
-  if (data.bottom_depth && els.btmDepth &&
-      (!els.btmDepth.value || els.btmDepth.classList.contains("prefilled"))) {
-    els.btmDepth.value = data.bottom_depth;
-    els.btmDepth.classList.add("prefilled");
+  const btm = fieldInput("btm_depth");
+  if (data.bottom_depth && btm &&
+      (!btm.value || btm.classList.contains("prefilled"))) {
+    btm.value = data.bottom_depth;
+    btm.classList.add("prefilled");
   }
 }
 
