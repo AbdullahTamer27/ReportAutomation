@@ -82,17 +82,14 @@ class GenerateRequest(BaseModel):
     template_id: int = Field(..., description="ID of a registered template (chosen by configuration)")
     excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
     working_dir: str = Field(..., description="Folder holding images (IMGS/ or itself); the report is saved here")
-    well_name: str | None = Field(None, description="Well name; used for the output filename and recorded in history")
     damage_count: int = Field(0, ge=0, description="N: number of damage points (each = 3 pictures). 0 = none.")
     company_id: int = Field(..., description="ID of the registered company whose logo goes in {{COMP}} + headers")
     include_disclaimer: bool = Field(False, description="Keep the {{DISC}} disclaimer table (else remove it)")
     config: str | None = Field(None, description="Configuration string for the universal master template, e.g. 4.5x3.5TBG-7LNR-9.625")
-    log_date: str | None = Field(None, description="Replaces the {{log_date}} text tag (normalized to DD-Mon-YYYY)")
-    orig_comp: str | None = Field(None, description="Original completion — replaces {{orig_comp}} (DD-Mon-YYYY)")
-    last_wko: str | None = Field(None, description="Last workover — replaces {{last_wko}} (DD-Mon-YYYY)")
-    well_type: str | None = Field(None, description="Replaces the {{well_type}} text tag")
-    btm_depth: str | None = Field(None, description="Bottom depth — replaces {{btm_depth}}")
-    field: str | None = Field(None, description="Field name — replaces the {{field}} text tag")
+    fields: dict[str, str | None] = Field(
+        default_factory=dict,
+        description="User-input metadata keyed by field-registry key (well_name, log_date, …). "
+                    "Drives the {{tag}} substitutions; the registry defines each field.")
     wellhead_damage: bool = Field(False, description="Well-head overlay: True = damage statement, False = clean statement")
     fw16: bool = Field(False, description="FW16 tool: use the flat 1.2 K-factor set for {{tool_type}} (else the default set)")
     xml_path: str | None = Field(None, description="WellSchematic XML; when given, the Raw Data sheet is (re)written into the data Excel")
@@ -686,13 +683,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
             include_disclaimer=req.include_disclaimer,
             wellhead_damage=req.wellhead_damage,
             fw16=req.fw16,
-            well_name=req.well_name,
-            well_type=req.well_type,
-            btm_depth=req.btm_depth,
-            field=req.field,
-            log_date=req.log_date,
-            orig_comp=req.orig_comp,
-            last_wko=req.last_wko,
+            fields=req.fields,
             progress=on_progress,
             review=on_review,
         )
@@ -713,7 +704,7 @@ def generate_report(req: GenerateRequest, db: Session = Depends(get_db)):
     return GenerateResponse(
         run_id=run.id,
         template_id=template.id,
-        well_name=req.well_name,
+        well_name=req.fields.get("well_name"),
         status=run.status,
         output_path=output_path,
         filename=os.path.basename(output_path),
@@ -761,7 +752,7 @@ def _record_run(db: Session, template_id: int, req: GenerateRequest,
                 output_path, status: str) -> ReportRun:
     run = ReportRun(
         template_id=template_id,
-        well_name=req.well_name,
+        well_name=req.fields.get("well_name"),
         excel_path=req.excel_path,
         working_dir=req.working_dir,
         output_docx_path=output_path,

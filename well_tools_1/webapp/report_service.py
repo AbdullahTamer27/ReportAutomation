@@ -21,6 +21,7 @@ from well_tools.report.pipe_config import (
 )
 
 from .naming import normalize_date, safe_filename, report_filename
+from .field_registry import user_fields
 from .interval import generate_raw_data_file, IntervalInputError
 
 OPTIONAL_DEFAULT = "N/A"
@@ -29,9 +30,7 @@ OPTIONAL_DEFAULT = "N/A"
 def generate(*, template_path, company_name, company_logo_path,
              excel_path, working_dir, xml_path,
              config, damage_count=0, include_disclaimer=False, wellhead_damage=None,
-             fw16=False,
-             well_name=None, well_type=None, btm_depth=None, field=None,
-             log_date=None, orig_comp=None, last_wko=None,
+             fw16=False, fields=None,
              progress=None, review=None):
     """Generate a report and return ``{"output_path": str, "notes": [str, ...]}``.
 
@@ -49,38 +48,32 @@ def generate(*, template_path, company_name, company_logo_path,
         if review:
             review(msg)
 
+    # User-input metadata values, keyed by registry key ({well_name, log_date, …}).
+    fields = fields or {}
+
     # Output filename: wellname_logdate_EPDT_RIGLESS_REPORT_companyname.docx
     output_path = os.path.join(
         working_dir,
-        report_filename(well_name, normalize_date(log_date), company_name),
+        report_filename(fields.get("well_name"),
+                        normalize_date(fields.get("log_date")), company_name),
     )
 
-    # Plain-text tags replaced anywhere in the document (run-preserving). These
-    # fields are OPTIONAL (only configuration, company, and number of damages are
-    # required): a blank gets a default value and a warning in the report notes.
-    # Date fields are normalized to DD-Mon-YYYY; non-dates ("N/A") pass through.
+    # Plain-text tags replaced anywhere in the document (run-preserving). The
+    # user-input metadata fields come from the field registry (single source of
+    # truth) — each is OPTIONAL: a blank gets OPTIONAL_DEFAULT and a note; fields
+    # marked normalize="date" are formatted DD-Mon-YYYY, non-dates ("N/A") pass
+    # through. Adding a field is one registry entry — no change here.
     defaulted = []
 
-    def _opt(value, label):
-        if value is None or not str(value).strip():
-            defaulted.append(label)
+    def _opt_field(f):
+        raw = fields.get(f.key)
+        if raw is None or not str(raw).strip():
+            defaulted.append(f.label)
             return OPTIONAL_DEFAULT
-        return str(value)
+        return normalize_date(raw) if f.normalize == "date" else str(raw)
 
-    def _opt_date(value, label):
-        if value is None or not str(value).strip():
-            defaulted.append(label)
-            return OPTIONAL_DEFAULT
-        return normalize_date(value)
-
-    text_fields = {
-        "{{well_name}}": _opt(well_name, "Well name"),
-        "{{well_type}}": _opt(well_type, "Well type"),
-        "{{btm_depth}}": _opt(btm_depth, "Bottom depth"),
-        "{{field}}": _opt(field, "Field"),
-        "{{log_date}}": _opt_date(log_date, "Log date"),
-        "{{orig_comp}}": _opt_date(orig_comp, "Original completion"),
-        "{{last_wko}}": _opt_date(last_wko, "Last workover"),
+    text_fields = {f.tag: _opt_field(f) for f in user_fields()}
+    text_fields.update({
         # Delivery date = today's date, formatted like the other dates. Auto-filled.
         "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
         # Damage present ⇒ " and Hotspots" (place the tag right after the word,
@@ -89,7 +82,7 @@ def generate(*, template_path, company_name, company_logo_path,
         # Tool-type K-factors: FW16 uses a flat 1.2 set; the default otherwise.
         "{{tool_type}}": ("(K1=1.2, K2=1.2, K3=1.2, K4=1.2)" if fw16
                           else "(K1=0.45, K2=0.55, K3=0.7, K4=0.9)"),
-    }
+    })
     if defaulted:
         notes.append(
             f"⚠ Left blank — defaulted to '{OPTIONAL_DEFAULT}': " + ", ".join(defaulted) + "."
@@ -155,7 +148,8 @@ def generate(*, template_path, company_name, company_logo_path,
     # SEPARATE workbook beside the report — the data Excel is never opened for
     # writing, so its macro-computed grades/bars stay intact. Non-fatal.
     if xml_path:
-        stem = safe_filename(well_name) if well_name else "well"
+        _wn = fields.get("well_name")
+        stem = safe_filename(_wn) if _wn else "well"
         rawdata_path = os.path.join(working_dir, f"{stem}_RawData.xlsx")
         try:
             rd = generate_raw_data_file(xml_path, rawdata_path, data_excel=excel_path)

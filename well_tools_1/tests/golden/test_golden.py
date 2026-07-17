@@ -107,13 +107,9 @@ def test_golden(set_name, scenario, frozen_now, tmp_path):
         damage_count=inputs.get("damage_count", 0),
         include_disclaimer=inputs.get("include_disclaimer", False),
         wellhead_damage=inputs.get("wellhead_damage"),
-        well_name=inputs.get("well_name"),
-        well_type=inputs.get("well_type"),
-        btm_depth=inputs.get("btm_depth"),
-        field=inputs.get("field"),
-        log_date=inputs.get("log_date"),
-        orig_comp=inputs.get("orig_comp"),
-        last_wko=inputs.get("last_wko"),
+        fields={k: inputs.get(k) for k in
+                ("well_name", "well_type", "btm_depth", "field",
+                 "log_date", "orig_comp", "last_wko")},
     )
     produced = result["output_path"]
     assert os.path.isfile(produced), f"{set_name}/{scenario}: no output produced"

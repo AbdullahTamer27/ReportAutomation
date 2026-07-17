@@ -39,7 +39,7 @@ export async function generate() {
         xml_path: state.xmlPath || null,
         config: configValue() || null,
         // metadata fields (well_name, field, dates, …) from the registry-driven form
-        ...collectFields(),
+        fields: collectFields(),
       }),
     });
 
