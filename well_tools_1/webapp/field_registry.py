@@ -13,7 +13,8 @@ Authoring is intentionally in code (a technical maintainer edits this file), per
 the locked decisions in PLAN.md → Epic C.
 """
 
-from dataclasses import dataclass, asdict, field as _dc_field
+import re
+from dataclasses import dataclass, asdict
 
 
 @dataclass(frozen=True)
@@ -67,3 +68,30 @@ def as_dicts(fields):
 def by_key(key):
     """Look up a field by its payload key, or None."""
     return next((f for f in USER_FIELDS if f.key == key), None)
+
+
+# --- Tag classification (for template introspection, Epic C3) ----------------
+# Engine-managed or derived tags that must NEVER appear as form inputs. Exact
+# names + prefix/pattern families for the per-pipe / per-section tags.
+_NON_USER_EXACT = {
+    "{{SUMMARY}}", "{{DISC}}", "{{COMP}}", "{{COMPNAME}}", "{{INTERVALS}}",
+    "{{casings}}", "{{liners}}", "{{tubings}}", "{{pipe_config}}",
+    "{{delivery_date}}", "{{hotspot}}", "{{tool_type}}", "{{weatherford_corr}}",
+}
+_NON_USER_PREFIXES = ("{{highest_", "{{joints_", "{{pie_", "{{ovl", "{{DMG")
+_ROLE_TAG = re.compile(r"^\{\{\w+Pipe_")     # firstPipe_name, secondPipe_suffix, …
+
+
+def is_non_user_tag(tag):
+    """True for engine/derived tags — introspection hides these from the form."""
+    if tag in _NON_USER_EXACT or _ROLE_TAG.match(tag):
+        return True
+    return any(tag.startswith(p) for p in _NON_USER_PREFIXES)
+
+
+def generic_field(tag):
+    """A plain text Field for a user-ish tag the registry doesn't define, so a
+    brand-new template's unknown tag still gets an input (labelled from the tag)."""
+    key = tag[2:-2].strip()                       # inner name, e.g. "block"
+    return Field(tag=tag, key=key, dom_id=key,
+                 label=key.replace("_", " ").capitalize())

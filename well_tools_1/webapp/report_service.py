@@ -21,7 +21,7 @@ from well_tools.report.pipe_config import (
 )
 
 from .naming import normalize_date, safe_filename, report_filename
-from .field_registry import user_fields
+from .field_registry import user_fields, by_key
 from .interval import generate_raw_data_file, IntervalInputError
 
 OPTIONAL_DEFAULT = "N/A"
@@ -72,7 +72,20 @@ def generate(*, template_path, company_name, company_logo_path,
             return OPTIONAL_DEFAULT
         return normalize_date(raw) if f.normalize == "date" else str(raw)
 
-    text_fields = {f.tag: _opt_field(f) for f in user_fields()}
+    # Registry user fields the caller supplied — i.e. the ones the chosen template
+    # declares (the form only sends those). Fields absent from the template aren't
+    # sent, so they aren't defaulted or substituted (template-agnostic, Epic C3).
+    text_fields = {f.tag: _opt_field(f) for f in user_fields() if f.key in fields}
+    # Unknown user-ish tags the template declared (no registry entry) — plain text.
+    for key, val in fields.items():
+        if by_key(key) is not None:
+            continue                                  # a registry field, handled above
+        tag = "{{" + str(key) + "}}"
+        if val is None or not str(val).strip():
+            defaulted.append(key)
+            text_fields[tag] = OPTIONAL_DEFAULT
+        else:
+            text_fields[tag] = str(val)
     text_fields.update({
         # Delivery date = today's date, formatted like the other dates. Auto-filled.
         "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),

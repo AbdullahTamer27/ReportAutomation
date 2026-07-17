@@ -7,15 +7,33 @@ import { escapeHtml } from "./dom.js";
 
 let FIELDS = [];
 
-export async function loadFields() {
+export async function loadFields(templateId) {
+  const url = templateId
+    ? `/api/fields?template_id=${encodeURIComponent(templateId)}`
+    : "/api/fields";
   try {
-    const res = await fetch("/api/fields");
+    const res = await fetch(url);
     const data = await res.json();
     FIELDS = (data && data.fields) || [];
   } catch (_e) {
     FIELDS = [];
   }
   return FIELDS;
+}
+
+// Re-render the form for a template (or the full registry when templateId is
+// falsy), preserving any values the user already typed.
+export async function refreshFields(container, templateId) {
+  const prev = collectFields();          // capture current values (old FIELDS)
+  await loadFields(templateId);          // FIELDS now matches the template
+  renderFields(container);
+  for (const f of FIELDS) {
+    const v = prev[f.key];
+    if (v != null && v !== "") {
+      const el = document.getElementById(f.dom_id);
+      if (el) el.value = v;
+    }
+  }
 }
 
 function fieldSection(f) {

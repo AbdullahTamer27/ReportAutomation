@@ -9,7 +9,7 @@ import {
   openWellFolder, pickExcel, browseFolder, pickXmlReport, pickSchematic, toWorkspace,
   inputsError,
 } from "./inputs.js";
-import { loadFields, renderFields } from "./fields.js";
+import { refreshFields } from "./fields.js";
 import { generate } from "./generate.js";
 import { tmPickFile, tmRegister, cmPickFile, cmRegister } from "./managers.js";
 import { pickGhostCsv, ghostMerge, ghostMergeFolder } from "./ghost.js";
@@ -47,7 +47,10 @@ els.loadSchematic.addEventListener("click", pickSchematic);
 els.toWorkspace.addEventListener("click", toWorkspace);
 
 // --- Workspace form ---------------------------------------------------------
-els.templateSelect.addEventListener("change", refreshTemplateHint);
+els.templateSelect.addEventListener("change", () => {
+  refreshTemplateHint();
+  refreshFields(els.metaFields, els.templateSelect.value || null);   // form follows the template
+});
 els.configInput.addEventListener("input", scheduleConfigPreview);
 els.configInput.addEventListener("input", () => els.configInput.classList.remove("prefilled"));
 els.company.addEventListener("change", refreshCompanyHint);
@@ -62,7 +65,7 @@ els.damageCount.addEventListener("input", () => {
 
 // --- Boot -------------------------------------------------------------------
 showView("mode");
-loadFields().then(() => renderFields(els.metaFields));   // build the metadata form
+refreshFields(els.metaFields);   // build the metadata form (full registry until a template is chosen)
 checkForUpdates();   // non-blocking: banner / required modal / blocked screen
 
 // Show the running version beside the brand name (from the local server).
