@@ -73,10 +73,12 @@ select:focus, .text-input:focus {
   box-shadow: 0 0 0 3px var(--error-bg);
 }
 
-/* A field auto-filled by Talos (schematic/XML) — bronze until reviewed/edited. */
+/* A field auto-filled by Talos (schematic/XML) — bronze until reviewed/edited.
+   The fill is --bronze-wash, NOT --bronze-glow: the glow is the focus ring, and
+   reusing it here made every auto-filled field look permanently focused. */
 .text-input.prefilled {
   border-color: var(--bronze);
-  background: var(--bronze-glow);
+  background: var(--bronze-wash);
 }
 .text-input.prefilled:focus {
   box-shadow: 0 0 0 3px var(--bronze-glow);
@@ -186,17 +188,52 @@ button:focus-visible {
   max-height: 240px;
   overflow: auto;
 }
+/* Severity is encoded in SHAPE as well as hue: each note carries a monochrome
+   marker that inherits its severity color. Amber "warn" and red "error" are the
+   pair that collapse together under red/green color-vision deficiency, so the
+   glyph — not the color — is what actually separates them.
+
+   The marker lives here rather than in the note text so it stays monochrome
+   (the old inline ❌/⚠ rendered as full-colour emoji on Windows, fighting the
+   token palette) and so wrapped lines hang past it instead of running under it.
+   The JS strips the leading glyph from the text — see noteBody() in generate.js. */
 .notes-list li {
+  position: relative;                /* not grid/flex: robust to inline markup */
   font-size: 12px;
   line-height: 1.5;
-  padding: 4px 8px;
+  padding: 4px 8px 4px 26px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
+}
+.notes-list li::before {
+  content: "\00B7";                  /* · — default, overridden per severity */
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
 }
 .note-error { color: var(--error-fg); }
 .note-warn  { color: var(--warn-fg); }
 .note-fix   { color: var(--info-fg); }
+.note-ok    { color: var(--success-fg); }
 .note-info  { color: var(--text-dim); opacity: 0.85; }
+
+/* Must out-specify `.notes-list li::before` (0,1,2) — a bare `.note-error::before`
+   scores (0,1,1) and silently loses to it, leaving every note showing the
+   default dot. Keep the `.notes-list li` prefix on all five.
+
+   The trailing \FE0E is a variation selector forcing TEXT presentation: Windows
+   otherwise renders several of these as full-colour emoji, which is the exact
+   thing this change removes. */
+.notes-list li.note-error::before { content: "\2715\FE0E"; }   /* ✕ */
+.notes-list li.note-warn::before  { content: "\25B2\FE0E"; }   /* ▲ */
+.notes-list li.note-fix::before   { content: "\270E\FE0E"; }   /* ✎ Talos fixed it */
+.notes-list li.note-ok::before    { content: "\2713\FE0E"; }   /* ✓ */
+.notes-list li.note-info::before  { content: "\00B7"; }        /* · never emoji */
 
 /* ===== Configuration preview (parsed pipe model) ===== */
 .config-preview {

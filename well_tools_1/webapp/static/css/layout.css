@@ -44,7 +44,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 6px;
-  background: linear-gradient(90deg, #ffffff, #c9d2ff);
+  background: var(--text-grad);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -128,7 +128,12 @@
   border-radius: var(--radius);
   padding: 20px 22px 24px;
   box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.75);
-  max-height: calc(100vh - 80px);
+  /* The panel scrolls internally, so a person never scrolls the outer page —
+     which means it has to fit BETWEEN the two fixed bars on its own. It starts
+     at (--topbar-h + 32px) and must stop short of the footer, plus a 16px gap.
+     The old flat `100vh - 80px` put the bottom at 100vh + 4px while the footer
+     starts at 100vh - 44px, so a constant 48px of the panel was always hidden. */
+  max-height: calc(100vh - var(--topbar-h) - var(--footer-h) - 48px);
   display: flex;
   flex-direction: column;
 }

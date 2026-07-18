@@ -82,8 +82,10 @@ export async function ghostMergeFolder() {
 function ghostFolderSuccess(data) {
   const items = (data.results || []).map((r) =>
     r.ok
-      ? `<li class="note-info">✓ ${escapeHtml(r.file)} — ${r.input_rows}→${r.output_rows} rows, ${r.merged_chains} chain(s)</li>`
-      : `<li class="note-error">✗ ${escapeHtml(r.file)} — ${escapeHtml(r.error || "failed")}</li>`
+      // Markers come from CSS (.notes-list li::before) — same vocabulary as the
+      // report notes, so a merged file and a clean report read alike.
+      ? `<li class="note-ok">${escapeHtml(r.file)} — ${r.input_rows}→${r.output_rows} rows, ${r.merged_chains} chain(s)</li>`
+      : `<li class="note-error">${escapeHtml(r.file)} — ${escapeHtml(r.error || "failed")}</li>`
   ).join("");
   ghostStatus(
     data.failed ? "info" : "success",

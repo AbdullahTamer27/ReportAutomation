@@ -113,19 +113,33 @@ function showInfo(msg) {
 function showError(msg) {
   showStatus("error", `<strong>Error:</strong> ${escapeHtml(msg)}`);
 }
+// The backend prefixes each note with a severity glyph. We read the severity
+// from it, then drop it from the display text — the marker is redrawn in CSS
+// (.notes-list li::before) so it stays monochrome and stays aligned.
+const NOTE_SEVERITY = [
+  ["❌", "note-error"],
+  ["⚠", "note-warn"],
+  ["✎", "note-fix"],
+];
+
 function noteClass(text) {
   const t = String(text).trim();
-  if (t.startsWith("❌")) return "note-error";
-  if (t.startsWith("⚠")) return "note-warn";
-  if (t.startsWith("✎")) return "note-fix";
-  return "note-info";
+  const hit = NOTE_SEVERITY.find(([glyph]) => t.startsWith(glyph));
+  return hit ? hit[1] : "note-info";
+}
+
+function noteBody(text) {
+  const t = String(text).trim();
+  const hit = NOTE_SEVERITY.find(([glyph]) => t.startsWith(glyph));
+  // Trim the glyph plus any variation selector / spacing that follows it.
+  return hit ? t.slice(hit[0].length).replace(/^[️\s]+/, "") : t;
 }
 
 function renderNotes(notes) {
   if (!Array.isArray(notes) || notes.length === 0) return "";
   const issues = notes.filter((n) => noteClass(n) !== "note-info").length;
   const items = notes
-    .map((n) => `<li class="${noteClass(n)}">${escapeHtml(String(n).trim())}</li>`)
+    .map((n) => `<li class="${noteClass(n)}">${escapeHtml(noteBody(n))}</li>`)
     .join("");
   const label = issues
     ? `Report notes — ${issues} warning${issues === 1 ? "" : "s"}`

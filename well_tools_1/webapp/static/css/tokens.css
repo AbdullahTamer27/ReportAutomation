@@ -27,7 +27,13 @@
   --bronze: #c98a3b;
   --bronze-2: #e0a55a;
   --bronze-grad: linear-gradient(135deg, #c07f31 0%, #e0a55a 100%);
-  --bronze-glow: rgba(201, 138, 59, 0.30);
+  --bronze-glow: rgba(201, 138, 59, 0.30);   /* focus rings + button shadow ONLY */
+  --bronze-wash: rgba(201, 138, 59, 0.09);   /* a bronze *fill* (auto-filled inputs) */
+
+  /* Warm display gradient for the wordmark and the mode heading. Bronze leads
+     every accent, so the second stop is a bronze tint — not the periwinkle that
+     predated that rule. */
+  --text-grad: linear-gradient(90deg, #ffffff, #e8cba4);
 
   /* semantic */
   --success-fg: #4ade80;
@@ -44,6 +50,9 @@
   --radius: 16px;
   --radius-sm: 10px;
 
-  /* layout */
+  /* layout — both bars are fixed, so every scroll container has to subtract them.
+     Keep these truthful: .topbar and .app-footer set their height from these, and
+     the page padding + preview max-height are derived from them. */
   --topbar-h: 52px;
+  --footer-h: 44px;
 }
