@@ -33,6 +33,7 @@ COLUMN_NAMES = [
 ]
 JOINT_NO_IDX = 0
 BODY_LEN_IDX = 3
+NOM_THK_IDX = 4
 MAX_LOSS_DEPTH_IDX = 6
 MAX_LOSS_IDX = 7
 GRADE_IDX = 8
@@ -96,6 +97,44 @@ def typical_body_length(data_rows):
     return statistics.median(lengths)
 
 
+def _section_key(vals):
+    """Which section of the string a joint belongs to, keyed by nominal wall
+    thickness. Joints of one pipe spec share a wall, so this is what separates the
+    two halves of a TAPERED string (e.g. 4 1/2" x 3 1/2"). None when unreadable."""
+    nt = vals[NOM_THK_IDX]
+    return round(nt, 3) if isinstance(nt, (int, float)) and nt > 0 else None
+
+
+def body_length_norms(data_rows):
+    """``(per_section, fallback)`` typical joint lengths.
+
+    A tapered string carries TWO joint populations — the 4 1/2" half at ~38 ft and
+    the 3 1/2" half at ~28 ft — so judging every joint against one string-wide
+    median flags a whole section as anomalous. Each section (nominal wall) gets its
+    own median instead; sections with too few joints to establish a norm fall back
+    to the string median. A single-size string yields one section, so its result is
+    identical to the old behaviour."""
+    buckets = {}
+    for v in data_rows:
+        if is_excluded(v):
+            continue
+        bl = v[BODY_LEN_IDX]
+        if not (isinstance(bl, (int, float)) and bl > 0):
+            continue
+        key = _section_key(v)
+        if key is not None:
+            buckets.setdefault(key, []).append(bl)
+    per_section = {k: statistics.median(v) for k, v in buckets.items()
+                   if len(v) >= BODY_LEN_MIN_SAMPLE}
+    return per_section, typical_body_length(data_rows)
+
+
+def expected_body_length(vals, norms):
+    """The length to judge `vals` against: its own section's norm, else the string's."""
+    per_section, fallback = norms
+    return per_section.get(_section_key(vals), fallback)
+
+
 def review_row(table_name, vals, review, typical_len=None):
     """Sanity-check one real (non-excluded) data row. Corrects vals[GRADE_IDX]
     in place when it disagrees with Max Loss (%). Emits messages via review(msg).
@@ -118,8 +157,11 @@ def review_row(table_name, vals, review, typical_len=None):
         low = typical_len * (1 - BODY_LEN_SHORT_TOL)
         high = typical_len * (1 + BODY_LEN_LONG_TOL)
         if bl < low or bl > high:
-            review(f"⚠ {table_name} joint {jn}: Body Length {bl:.1f} ft is off this "
-                   f"string's typical {typical_len:.1f} ft (expected {low:.1f}–{high:.1f})")
+            sec = _section_key(vals)
+            wall = f" ({sec:g} in wall)" if sec is not None else ""
+            review(f"⚠ {table_name} joint {jn}: Body Length {bl:.1f} ft is off the "
+                   f"typical {typical_len:.1f} ft for its section{wall} "
+                   f"(expected {low:.1f}–{high:.1f})")
 
     # Grade vs Max Loss (%) — correct the grade, never the value.
     loss = vals[MAX_LOSS_IDX]
@@ -275,7 +317,7 @@ def fill_table(table, data_rows, table_name=None, review=None):
     """Fill a tagged table with data_rows using the cloned-style-row approach.
     Real data rows are sanity-checked (and grade-corrected) via review_row."""
     template_row = table.rows[1]   # the single styled data row
-    typical_len = typical_body_length(data_rows)   # string's median joint length
+    norms = body_length_norms(data_rows)   # per-section medians + string fallback
     for vals in data_rows:
         new_row = clone_row(table, template_row)
         cells = new_row.cells
@@ -295,7 +337,8 @@ def fill_table(table, data_rows, table_name=None, review=None):
             run.font.name = "Calibri"; run.font.size = Pt(10)
         else:
             # Review + correct grade before writing the cells.
-            review_row(table_name, vals, review, typical_len=typical_len)
+            review_row(table_name, vals, review,
+                       typical_len=expected_body_length(vals, norms))
             for i in range(10):
                 text = fmt(vals[i], i)
                 # Cap the Damage Profile bar so a long bar can't widen/wrap the cell.
