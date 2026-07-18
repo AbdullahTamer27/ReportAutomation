@@ -203,19 +203,31 @@ def _spawn_swap_helper(cur_exe, new_exe):
     """Write and launch a detached .bat that waits for the old exe to unlock,
     replaces it with the freshly-downloaded build, and relaunches it.
 
-    Two subtleties of the frozen onefile case, both of which broke the earlier
-    version (download succeeded but the swap/relaunch didn't happen):
+    Three subtleties of the frozen onefile case, each of which broke an earlier
+    version of this:
 
       * The PyInstaller bootloader keeps ``cur_exe`` locked until it fully exits
         — a beat *after* our ``os._exit(0)``. So we RETRY the move until the lock
         clears rather than assuming the file is free the moment our PID is gone.
       * ``timeout`` fails in a console-less detached process ("Input redirection
         is not supported") and returns instantly, so we sleep with ``ping``.
+      * A onefile app runs with ``_MEIPASS2`` (and, on PyInstaller 6+, ``_PYI_*``)
+        pointing at ITS OWN extraction dir. Those are inherited by the helper and
+        then by the relaunched exe, whose bootloader concludes it is "already
+        extracted" and runs from the OLD process's temp dir — which is being
+        deleted, so it dies with "Failed to load Python DLL … python311.dll".
+        The relaunch therefore needs a CLEAN environment: we strip the vars both
+        from the helper's environment and inside the script itself.
     """
     bat = os.path.join(tempfile.gettempdir(), "talos_update.bat")
     script = (
         "@echo off\r\n"
         "setlocal\r\n"
+        # Never let the new exe inherit this process's extraction dir.
+        'set "_MEIPASS2="\r\n'
+        'set "_PYI_APPLICATION_HOME_DIR="\r\n'
+        'set "_PYI_ARCHIVE_FILE="\r\n'
+        'set "_PYI_PARENT_PROCESS_LEVEL="\r\n'
         "set /a tries=0\r\n"
         ":swap\r\n"
         # Succeeds only once every handle to the old exe is released.
@@ -225,11 +237,18 @@ def _spawn_swap_helper(cur_exe, new_exe):
         "ping -n 2 127.0.0.1 >nul\r\n"         # ~1s sleep that works without a console
         "goto swap\r\n"
         ":launch\r\n"
+        # Let the old process finish tearing down its temp dir before the new one
+        # extracts, and give a just-written 260 MB exe a moment to settle.
+        "ping -n 3 127.0.0.1 >nul\r\n"
         f'start "" "{cur_exe}"\r\n'
         ":done\r\n"
         'del "%~f0"\r\n'
     )
     with open(bat, "w", encoding="utf-8") as f:
         f.write(script)
+    # Same reason as the `set` lines above — belt and braces, since the helper
+    # inherits our environment unless we hand it a cleaned one.
+    env = {k: v for k, v in os.environ.items()
+           if k != "_MEIPASS2" and not k.startswith("_PYI")}
     DETACHED = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen(["cmd", "/c", bat], creationflags=DETACHED, close_fds=True)
+    subprocess.Popen(["cmd", "/c", bat], creationflags=DETACHED, close_fds=True, env=env)
