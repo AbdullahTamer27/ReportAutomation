@@ -84,3 +84,39 @@ def test_all_controls_when_template_uses_them(tmp_path):
     p = _make(tmp_path, body_runs=[
         "{{DISC}} {{ovl_wellhead}} {{tool_type}} {{damage_block_start}}"])
     assert all(template_form(p)["controls"][i]["present"] for i in range(4))
+
+
+def test_fast_scan_matches_python_docx_reference(tmp_path):
+    # The zip+regex scanner must agree with the python-docx walk on the tricky
+    # cases: tags split across runs, in a table cell, and in a header.
+    from webapp.introspect import _scan_zip, _scan_docx
+    p = _make(
+        tmp_path,
+        body_runs=["{{well_name}} ", "{{orig", "_comp}} ", "{{pie_firstPipe}}"],
+        cell_text="{{SUMMARY}} {{log_date}}",
+        header_text="{{COMPNAME}}",
+    )
+    assert _scan_zip(p) == _scan_docx(p)
+
+
+def test_extract_tags_caches_and_invalidates_on_change(tmp_path):
+    from webapp.introspect import extract_tags
+    p = _make(tmp_path, body_runs=["{{well_name}}"])
+    assert extract_tags(p) == {"{{well_name}}"}
+    assert extract_tags(p) == {"{{well_name}}"}          # served from cache
+
+    # Rewrite the file with different tags → new mtime/size → rescanned.
+    import time
+    time.sleep(0.01)
+    doc = Document()
+    doc.add_paragraph("{{field}} {{block}}")
+    doc.save(p)
+    assert extract_tags(p) == {"{{field}}", "{{block}}"}
+
+
+def test_cached_result_is_not_mutable_by_callers(tmp_path):
+    from webapp.introspect import extract_tags
+    p = _make(tmp_path, body_runs=["{{well_name}}"])
+    got = extract_tags(p)
+    got.add("{{injected}}")                               # mutating the copy…
+    assert "{{injected}}" not in extract_tags(p)          # …must not poison the cache
