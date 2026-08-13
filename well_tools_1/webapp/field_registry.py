@@ -106,6 +106,10 @@ _NON_USER_EXACT = {
     "{{SUMMARY}}", "{{DISC}}", "{{COMP}}", "{{COMPNAME}}", "{{INTERVALS}}",
     "{{casings}}", "{{liners}}", "{{tubings}}", "{{pipe_config}}",
     "{{delivery_date}}", "{{hotspot}}", "{{tool_type}}", "{{weatherford_corr}}",
+    # Block markers the engine expands/removes — never typed by anyone.
+    "{{damage_block_start}}", "{{damage_block_end}}",
+    # Image-slot tags: the picture comes from the images folder, not the form.
+    "{{proc}}", "{{tempgr}}", "{{wh}}", "{{raw}}", "{{well}}", "{{ts}}", "{{qc}}",
 }
 _NON_USER_PREFIXES = ("{{highest_", "{{joints_", "{{pie_", "{{ovl", "{{DMG")
 _ROLE_TAG = re.compile(r"^\{\{\w+Pipe_")     # firstPipe_name, secondPipe_suffix, …

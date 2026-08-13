@@ -50,3 +50,23 @@ def test_generic_field_is_optional_in_default_group():
     assert g.required is False
     assert g.group == "Optional details"
     assert g.label == "Block"
+
+
+def test_engine_markers_and_image_slots_are_never_form_fields():
+    """Introspection turns unknown tags into text boxes, which is right for a new
+    metadata tag and wrong for anything the engine owns. Block markers and image
+    slots are engine-owned: a text box for {{damage_block_start}} or {{qc}} is a
+    box that can only produce a broken report."""
+    for tag in ("{{damage_block_start}}", "{{damage_block_end}}",
+                "{{proc}}", "{{tempgr}}", "{{wh}}", "{{raw}}", "{{well}}",
+                "{{ts}}", "{{qc}}"):
+        assert fr.is_non_user_tag(tag), tag
+
+
+def test_every_image_tag_is_classified():
+    """Adding an image tag to the engine without teaching the registry about it
+    would silently put a text box on the form — so check the two lists agree."""
+    from well_tools.report.images import TAG_TO_FILE
+
+    for tag in TAG_TO_FILE:
+        assert fr.is_non_user_tag(tag), tag

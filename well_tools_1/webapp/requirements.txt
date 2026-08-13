@@ -30,3 +30,6 @@ lxml
 # pie-label behaviour differed and rendered the chart numbers blank in the exe.
 matplotlib==3.11.0
 numpy==2.4.6
+# Pillow arrives with matplotlib anyway, but the QC-plot pass reads and writes
+# images with it directly — pinned so the exe's image handling can't drift.
+pillow==12.2.0

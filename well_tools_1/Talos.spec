@@ -90,6 +90,12 @@ a = Analysis(
             "openpyxl",
             "openpyxl.cell._writer",
             "pandas",
+            # Pillow — the QC-plot pass reads/writes images directly, so it is a
+            # first-class dependency now, not just something matplotlib drags in.
+            "PIL",
+            "PIL.Image",
+            "PIL.TiffImagePlugin",
+            "PIL.PngImagePlugin",
         ]
     ),
     hookspath=[],

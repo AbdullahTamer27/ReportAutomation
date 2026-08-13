@@ -2,6 +2,10 @@
 HRDH_1702*
 improvements*
 
+# Scratch input folder at the repo root (raw well images / QC sheets dropped in
+# for a local run). The committed fixtures live under well_tools_1/tests/.
+/IMGS/
+
 # Archives
 *.zip
 

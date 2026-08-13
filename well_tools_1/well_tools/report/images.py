@@ -30,6 +30,9 @@ TAG_TO_FILE = {
     "{{raw}}":    "raw.jpg",
     "{{well}}":   "well.jpg",
     "{{ts}}":     "ts.jpg",
+    # Written by the qc_plot pass from the raw Warrior sheet (qc.tif) before
+    # this one runs; a hand-cropped qc.png is used as-is.
+    "{{qc}}":     "qc.png",
 }
 
 # Per-damage image tags: {{DMG<i>_<j>}} -> file "DMG<i>_<j>.<ext>".

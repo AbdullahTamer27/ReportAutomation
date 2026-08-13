@@ -271,7 +271,7 @@ later.
 - [~] **C4 — Polish (required + groups done; date-pickers/conditional deferred).** Groups / order / required from the registry; conditional
       fields (show/hide based on another field) only if a real report needs them.
 
-## Open decisions (pin before C1)
+## Open decisions (pinned before C1)
 - **Required-per-template** — start with `required` global-per-tag in the registry;
   add per-template overrides only if a tag is required in one report, optional in
   another.
@@ -280,3 +280,48 @@ later.
   derivers whose tags appear in the template.
 - **Unknown-tag default** — plain text input, labelled from the tag name (safe
   degradation; never blocks a new template).
+
+---
+
+# Epic D — The last three pictures
+
+Three pictures are still pasted in by hand. They are the hardest ones left, and
+they are hard for different reasons.
+
+| Picture | Status | Why it's hard |
+| ------- | ------ | ------------- |
+| **QC plot** (`{{qc}}`) | ✅ done | Cropping a log sheet whose geometry changes every report |
+| **Main vs Repeat** | ◻ | Two passes to align and compare, not one picture to crop |
+| **One-page summary** | ◻ | Composed, not cropped — it has to be *drawn* from the data |
+
+### D1 — QC plot ✅
+Crop the raw Warrior sheet to the track legend + the log, dropping the branding
+block at the top and the legend Warrior repeats at the foot.
+
+**Locked decision: structural, not calibrated.** The crop follows the drawn frame
+— the log is found as the tallest continuous vertical rule on the sheet — so it
+holds at any vertical scale, depth or track count without ever reading the
+plot's scale. Depth-based cropping (a window in feet) was considered and
+deferred: it needs the `1:5000` line read off the sheet, and nothing asks for it
+yet. The sheet *does* print its scale, so that door stays open.
+
+Two things worth remembering from building it:
+- **Warrior TIFFs do not decode.** The LZW strip carries no EOI terminator and
+  the final row is truncated, so libtiff — and with it Pillow, `sips` and Preview
+  — rejects the file outright. `well_tools/report/qc_plot.py` carries its own
+  tolerant reader; every QC picture depends on it.
+- **Detection cannot verify itself**, so it reports what it could not confirm as
+  a report note and places the picture anyway. Being told at generation time
+  beats finding out from the client.
+
+### D2 — Main vs Repeat *(next)*
+Not a crop: two logging passes shown against each other. Open questions — are
+they two separate sheets or two track sets on one? What does "aligned" mean when
+the passes cover different depth ranges? The Warrior header prints the pass name
+(the sample reads **MAIN PASS**), which is the obvious discriminator.
+
+### D3 — One-page summary
+The odd one out: nothing to crop, because the picture doesn't exist yet — it has
+to be composed from data the engine already holds (pipe model, damage clusters,
+grades). Closer to the pie-chart pass than to the QC pass. Needs a worked example
+of the intended layout before anything can be designed.

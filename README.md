@@ -36,6 +36,7 @@ It bundles two tools:
 - 🧭 **XML-driven layout** — give it a WellSchematic XML and it derives the configuration **inner→outer** (consolidating weight-change sections), sets the **bottom depth** from the deepest point, overrides each pipe's **shoe / liner-hanger depth** from the schematic, and **auto-counts the damages** (worst Class C/D per interval per pipe, clustered by depth). The channel for each damage callout is read from the workbook's THICKNESS sheet.
 - 📄 **Schematic-PDF pre-fill** — load a Well Cross Section Plot PDF to auto-fill the optional fields (well name, type, original completion, last workover) for review before generating.
 - 🖼️ **Borderless image placement** — images are sized to fit their cells with a clean border drawn on the picture; damage photos scale by N damage points, via a repeatable block **or** static `{{DMGi_j}}` slots.
+- 📉 **Auto-cropped QC plot** — the raw Warrior log sheet (`qc.tif`) is cropped to the legend + log, dropping the branding block and the legend Warrior repeats at the foot. The log is found by its own drawn frame, so it works at any vertical scale, depth or track count — and Warrior's TIFFs, which Pillow flatly refuses to decode, are read anyway.
 - 🏢 **Company branding** — pick a registered company; its logo fills the `{{COMP}}` body table **and** swaps the logo in every section header, while `{{COMPNAME}}` writes the name.
 - 📝 **Well-metadata tags** — `{{well_name}}`, `{{well_type}}`, `{{btm_depth}}`, `{{field}}`, `{{log_date}}`, `{{orig_comp}}`, `{{last_wko}}`, plus an auto `{{delivery_date}}`, with dates normalized to `DD-Mon-YYYY` (e.g. `09-Sep-2020`).
 - 📄 **Optional disclaimer** — a `{{DISC}}` table kept or removed via a checkbox.
@@ -217,6 +218,7 @@ Bottom depth and log date are left blank (not reliably present in the schematic)
 | `{{casings}}` / `{{liners}}` / `{{tubings}}` | Comma-separated list of sizes for that pipe type, largest first. |
 | `{{proc}}`, `{{wh}}`, … | Image placeholders (`proc`, `tempgr`, `wh`, `raw`, `well`, `ts`), mapped to files in the working/IMGS folder. |
 | `{{DMG<i>_<j>}}`        | Damage photos — 3 per damage point (`DMG1_1…DMG1_3`, `DMG2_1`, …). Use a repeatable `{{damage_block_start}}`/`{{damage_block_end}}` block **or** static `{{DMGi_j}}` slots. |
+| `{{qc}}`                | The QC log plot. Drop the raw Warrior sheet in as `qc.tif`; it is cropped to the legend + log automatically (branding and the repeated footer legend removed) and placed as `qc.png`. A hand-made `qc.png` with no `qc.tif` beside it is used as-is. |
 | `{{ovl_wellhead}}`      | Text box → the well-head **damage** or **clean** statement (picked by the checkbox). Never removed. |
 | `{{ovl_shoe_<role>}}` / `{{ovl_hanger_<role>}}` | Text boxes → per-pipe shoe (`18 5/8” Casing Shoe at 444.6ft`) and liner-hanger callouts. Unused boxes (absent pipe, bottom-string shoe, non-liner hanger) are removed. |
 | `{{ovl_ml<i>_<k>}}` / `{{ovl_ch<i>_<k>}}` | Text boxes inside the damage block → per-point metal-loss and channel callouts. `<i>` = damage picture (author it with `@N`, auto-numbered per clone), `<k>` = point 1–4. Unused slots removed. |

@@ -136,8 +136,14 @@ def build_automation_report(word_template_path, excel_data_path, working_dir,
     disclaimer.apply_in_file(output_path, bool(include_disclaimer),
                              progress=log, review=review, doc=shared)
 
-    # ---- 2) Images: output -> output (in place) ----
+    # ---- 1.9) QC plot: crop the raw Warrior sheet into the picture {{qc}} wants ----
     img_folder = resolve_image_folder(working_dir)
+    from . import qc_plot
+    if qc_plot.find_qc_source(img_folder):
+        log("Cropping the QC plot…")
+        qc_plot.prepare_qc_image(img_folder, progress=log, review=review)
+
+    # ---- 2) Images: output -> output (in place) ----
     log(f"Placing images from: {img_folder}")
     from . import images
     images.place_report_images(output_path, img_folder, output_path,
