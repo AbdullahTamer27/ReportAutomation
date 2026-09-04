@@ -24,6 +24,8 @@ from .field_registry import (
 
 _TAG = re.compile(r"\{\{[^{}]+\}\}")
 _XML_TAG = re.compile(rb"<[^>]+>")
+# A picture's tag lives in its Alt Text, which Word stores as a docPr attribute.
+_ALT_TEXT = re.compile(rb'(?:descr|name|title)="([^"]*)"')
 _W_P = qn("w:p")
 _W_T = qn("w:t")
 
@@ -46,9 +48,17 @@ def _scan_zip(docx_path):
             base = name.rsplit("/", 1)[-1]
             if not base.startswith(("document", "header", "footer")):
                 continue
-            text = _XML_TAG.sub(b"", z.read(name)).decode("utf-8", "ignore")
+            raw = z.read(name)
+            text = _XML_TAG.sub(b"", raw).decode("utf-8", "ignore")
             if "{{" in text:
                 tags.update(_TAG.findall(text))
+            # Stripping the XML tags also strips their attributes, and a
+            # picture's tag lives in one — the Alt Text of its placeholder
+            # ({{proc}}, {{qc}}, {{ops}}, the pies). Read those attributes
+            # specifically: scanning the raw XML instead would let the pattern
+            # run across the markup between two split runs and match nonsense.
+            for value in _ALT_TEXT.findall(raw):
+                tags.update(_TAG.findall(value.decode("utf-8", "ignore")))
     return tags
 
 

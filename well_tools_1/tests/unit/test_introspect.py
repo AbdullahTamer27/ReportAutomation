@@ -120,3 +120,45 @@ def test_cached_result_is_not_mutable_by_callers(tmp_path):
     got = extract_tags(p)
     got.add("{{injected}}")                               # mutating the copy…
     assert "{{injected}}" not in extract_tags(p)          # …must not poison the cache
+
+
+def test_alt_text_tags_are_found(tmp_path):
+    """A picture's tag lives in its Alt Text, which Word stores as an attribute
+    of the drawing — not as text. Stripping XML tags takes their attributes with
+    them, so those tags were invisible to the scan, and anything gated on one
+    ({{ops}}) would never fire."""
+    from docx import Document
+    from docx.shared import Inches
+    from PIL import Image
+
+    Image.new("RGB", (40, 20), (0, 0, 0)).save(str(tmp_path / "x.png"))
+    doc = Document()
+    doc.add_paragraph("{{well_name}}")
+    run = doc.add_paragraph().add_run()
+    run.add_picture(str(tmp_path / "x.png"), width=Inches(1))
+    doc.inline_shapes[0]._inline.docPr.set("descr", "{{ops}}")
+    path = str(tmp_path / "t.docx")
+    doc.save(path)
+
+    tags = extract_tags(path)
+    assert "{{ops}}" in tags
+    assert "{{well_name}}" in tags
+
+
+def test_the_scan_does_not_match_across_split_runs(tmp_path):
+    """Word splits a tag's text across runs, so the body is scanned with the
+    markup removed. Scanning the raw XML instead would let the pattern run from
+    one run's "{{" to another's "}}" and match a mouthful of XML as a tag."""
+    from docx import Document
+
+    doc = Document()
+    para = doc.add_paragraph()
+    para.add_run("{{well")          # deliberately split, as Word does
+    para.add_run("_name}}")
+    para.add_run(" and {{field}}")
+    path = str(tmp_path / "split.docx")
+    doc.save(path)
+
+    tags = extract_tags(path)
+    assert tags == {"{{well_name}}", "{{field}}"}
+    assert not any("<" in t or len(t) > 40 for t in tags)
