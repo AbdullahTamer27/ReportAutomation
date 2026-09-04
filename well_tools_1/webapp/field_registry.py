@@ -31,6 +31,8 @@ class Field:
     required: bool = False
     source: str = "user"          # user | derived | engine
     normalize: str = ""           # "date" → normalize_date() on the backend
+    default: str = ""             # written when the user leaves it blank or "N/A";
+                                  # "" falls back to the generic optional default
 
 
 # Free-text metadata fields, in form order. Widths reproduce today's layout:
@@ -43,8 +45,15 @@ USER_FIELDS = (
           placeholder="e.g. Zuluf"),
     Field("{{well_type}}", "well_type", "wellType", "Well type", width="half",
           placeholder="e.g. Oil producer"),
-    Field("{{btm_depth}}", "btm_depth", "btmDepth", "Bottom depth", mono=True,
-          placeholder="e.g. 7233 ft"),
+    Field("{{btm_depth}}", "btm_depth", "btmDepth", "Bottom depth", width="half",
+          mono=True, placeholder="e.g. 7233"),
+    # Rigs are not modelled anywhere else: a blank (or "N/A") means the job was
+    # done without one, which the report states as "RIGLESS" rather than leaving
+    # a gap. Anything typed here is written through as-is. The tag is uppercase
+    # because that is how it is written in the templates — the payload key stays
+    # lowercase like every other field's.
+    Field("{{RIG}}", "rig", "rigName", "Rig", width="half",
+          placeholder="e.g. Rig 42 (blank = RIGLESS)", default="RIGLESS"),
     Field("{{log_date}}", "log_date", "logDate", "Log date", type="date",
           width="half", mono=True, placeholder="e.g. 09-Sep-2020", normalize="date"),
     Field("{{orig_comp}}", "orig_comp", "origComp", "Original completion",

@@ -158,7 +158,6 @@ export async function toWorkspace() {
   } catch (err) {
     return inputsError(err.message || String(err));
   }
-  els.inputsSummary.textContent = `Excel: ${basename(state.excelPath)}  •  Folder: ${workingDir}`;
   showView("workspace");
   refreshTemplateHint();   // show the chosen template
   previewConfig();         // refresh the parsed-config preview (uses excelPath)

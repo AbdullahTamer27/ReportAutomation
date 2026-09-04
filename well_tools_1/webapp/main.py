@@ -397,7 +397,9 @@ def config_preview(req: ConfigPreviewRequest):
         try:
             d = deepest_point_from_xml(req.xml_path)
             if d is not None:
-                bottom_depth = f"{format_depth(d)} ft"
+                # Just the number: the unit belongs to the template's wording,
+                # not to the value the user sees in the form.
+                bottom_depth = format_depth(d)
         except Exception:  # noqa: BLE001
             logger.exception("Deepest-point read failed")
     return ConfigPreviewResponse(pipes=result["pipes"], warnings=result["warnings"],

@@ -51,7 +51,6 @@ export const els = {
   toWorkspace: $("toWorkspace"),
   inputsStatus: $("inputsStatus"),
   // workspace
-  inputsSummary: $("inputsSummary"),
   loadSchematic: $("loadSchematic"),
   schematicHint: $("schematicHint"),
   // metadata fields are rendered from the registry into #metaFields (see fields.js)

@@ -27,6 +27,27 @@ from .interval import generate_raw_data_file, IntervalInputError
 OPTIONAL_DEFAULT = "N/A"
 
 
+def resolve_field(f, fields, defaulted):
+    """The value a registry field contributes to the document.
+
+    Blank means "not supplied", and normally that is worth telling the user
+    about: it becomes ``OPTIONAL_DEFAULT`` and the field's name is appended to
+    `defaulted` for the run's notes. A field carrying its own `default` is the
+    exception — a blank Rig means the job was rigless, which is an answer rather
+    than an omission, so it writes that and stays out of the notes. "N/A" counts
+    as blank for such a field, since it means the same thing."""
+    raw = fields.get(f.key)
+    blank = raw is None or not str(raw).strip()
+    if not blank and f.default and str(raw).strip().upper() == OPTIONAL_DEFAULT:
+        blank = True
+    if blank:
+        if f.default:
+            return f.default
+        defaulted.append(f.label)
+        return OPTIONAL_DEFAULT
+    return normalize_date(raw) if f.normalize == "date" else str(raw)
+
+
 def generate(*, template_path, company_name, company_logo_path,
              excel_path, working_dir, xml_path,
              config, damage_count=0, include_disclaimer=False, wellhead_damage=None,
@@ -66,11 +87,7 @@ def generate(*, template_path, company_name, company_logo_path,
     defaulted = []
 
     def _opt_field(f):
-        raw = fields.get(f.key)
-        if raw is None or not str(raw).strip():
-            defaulted.append(f.label)
-            return OPTIONAL_DEFAULT
-        return normalize_date(raw) if f.normalize == "date" else str(raw)
+        return resolve_field(f, fields, defaulted)
 
     # Registry user fields the caller supplied — i.e. the ones the chosen template
     # declares (the form only sends those). Fields absent from the template aren't
