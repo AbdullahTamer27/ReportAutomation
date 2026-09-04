@@ -88,6 +88,38 @@ def extract_tags(docx_path):
     return tags
 
 
+def ops_tags():
+    """The ``{{tags}}`` in the bundled OPS workbook.
+
+    The one-page summary is built from its own Excel template, so the fields it
+    needs — the rig, say — appear nowhere in the Word template. Without this the
+    form would never offer them. Same zip-and-regex scan as a .docx: an xlsx
+    keeps its text in sharedStrings.xml."""
+    from . import config
+
+    path = config.OPS_TEMPLATE_PATH
+    try:
+        st = os.stat(path)
+        key = ("ops", os.path.abspath(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return set()                       # not bundled / not built yet
+    if key in _CACHE:
+        return set(_CACHE[key])
+
+    tags = set()
+    try:
+        with zipfile.ZipFile(path) as z:
+            for name in z.namelist():
+                if name.startswith("xl/") and name.endswith(".xml"):
+                    text = _XML_TAG.sub(b"", z.read(name)).decode("utf-8", "ignore")
+                    if "{{" in text:
+                        tags.update(_TAG.findall(text))
+    except (zipfile.BadZipFile, OSError):
+        return set()
+    _CACHE[key] = frozenset(tags)
+    return tags
+
+
 def template_form(docx_path):
     """The whole form for `docx_path`: ``{"fields": [...], "controls": [...]}``.
 
@@ -95,6 +127,10 @@ def template_form(docx_path):
     order) + generic text boxes for unknown user-ish tags. Controls = per-control
     visibility (checkboxes / damage count shown only when their tag is present)."""
     tags = extract_tags(docx_path)
+    # A template that places the one-page summary also needs whatever the OPS
+    # workbook asks for, so those tags join the template's own.
+    if "{{ops}}" in tags:
+        tags = tags | ops_tags()
     known = {f.tag for f in USER_FIELDS}
     present = [f for f in user_fields() if f.tag in tags]
     extras = [generic_field(t) for t in sorted(tags)

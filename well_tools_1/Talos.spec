@@ -51,6 +51,10 @@ a = Analysis(
         ("webapp/data/templates",   "webapp/data/templates"),
         # Bundled company-logos folder (manifest.json + logo images)
         ("webapp/data/companies",   "webapp/data/companies"),
+        # The OPS workbook. Deliberately NOT under data/templates: it is a
+        # fixed part of the report engine, not something the Template Manager
+        # lists or a user swaps, so it is never seeded into %APPDATA%.
+        ("webapp/data/ops",         "webapp/data/ops"),
     ] + wv_data + fitz_data + mpl_data + certifi_data,
     hiddenimports=(
         wv_hidden + fitz_hidden + mpl_hidden + certifi_hidden

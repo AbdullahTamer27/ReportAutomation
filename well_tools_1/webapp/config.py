@@ -57,9 +57,28 @@ MANIFEST_NAME = "manifest.json"
 if _FROZEN:
     BUNDLED_TEMPLATES_DIR = os.path.join(BUNDLE_DIR, "webapp", "data", "templates")
     BUNDLED_COMPANIES_DIR = os.path.join(BUNDLE_DIR, "webapp", "data", "companies")
+    _OPS_DIR = os.path.join(BUNDLE_DIR, "webapp", "data", "ops")
 else:
     BUNDLED_TEMPLATES_DIR = os.path.join(HERE, "data", "templates")
     BUNDLED_COMPANIES_DIR = os.path.join(HERE, "data", "companies")
+    _OPS_DIR = os.path.join(HERE, "data", "ops")
+
+# The one-page-summary workbook. Unlike the report templates this is a fixed
+# part of the engine: read-only, never copied into DATA_DIR, and never listed by
+# the Template Manager — so it cannot be swapped or deleted by a user, and
+# changing it means shipping a new build. The env var is an escape hatch for
+# working on the design without cutting a release; nothing in the UI exposes it.
+def _ops_template():
+    """The bundled OPS workbook. Either extension is accepted: the authored file
+    is macro-enabled, and whether the macros are kept is not worth a rename."""
+    for name in ("OPS.xlsx", "OPS.xlsm"):
+        path = os.path.join(_OPS_DIR, name)
+        if os.path.isfile(path):
+            return path
+    return os.path.join(_OPS_DIR, "OPS.xlsx")
+
+
+OPS_TEMPLATE_PATH = os.environ.get("OPS_TEMPLATE") or _ops_template()
 
 
 def ensure_user_data():
