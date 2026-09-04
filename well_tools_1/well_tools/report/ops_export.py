@@ -95,7 +95,10 @@ def render(xlsx_path, png_path, dpi=DEFAULT_DPI):
     except OpsExportError:
         raise
     except Exception as e:  # noqa: BLE001 — COM raises anything
-        raise OpsExportError(str(e)) from e
+        # Name the file we handed Excel. A COM error quotes whatever file Excel
+        # was unhappy about, which is not necessarily this one, and telling them
+        # apart is the difference between a bad workbook and a bad template.
+        raise OpsExportError(f"{os.path.abspath(xlsx_path)}: {e}") from e
     finally:
         if os.path.exists(pdf_path):
             try:

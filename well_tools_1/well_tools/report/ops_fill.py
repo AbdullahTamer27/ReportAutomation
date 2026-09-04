@@ -345,6 +345,10 @@ def fill_ops(template_path, dest_path, fields, pipe_summary_rows, hotspots,
 
     warnings = []
     workbook = load_workbook(template_path)
+    # Belt and braces: the authored template was macro-enabled, and a workbook
+    # carrying VBA saved under an .xlsx name is one Excel refuses to open —
+    # "macro-free file but contains macro-enabled content".
+    workbook.vba_archive = None
     ws = workbook[workbook.sheetnames[0]]
     tags = _find_tags(ws)
 

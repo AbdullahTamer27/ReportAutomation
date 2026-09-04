@@ -299,3 +299,36 @@ def test_growing_carries_merges_images_and_heights_with_it(tmp_path):
     for row, spot in zip(hs_rows, SPOTS):
         assert out.cell(row=row, column=2).value == spot["pipe"]["suffix"]
         assert out.cell(row=row, column=grade_col).value == spot["grade"]
+
+
+def test_output_is_never_macro_enabled(tmp_path):
+    """The template was authored as .xlsm. Saving a workbook that still carries
+    VBA under an .xlsx name produces a file Excel refuses to open — "a macro-free
+    file but contains macro-enabled content" — which killed the picture, since
+    the export hands that very file to Excel."""
+    import zipfile
+
+    template, _, _, _ = make_template(tmp_path)
+    # make the template macro-enabled, exactly as the authored one was
+    macro = str(tmp_path / "OPS.xlsm")
+    with zipfile.ZipFile(template) as src, \
+            zipfile.ZipFile(macro, "w", zipfile.ZIP_DEFLATED) as dst:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if item.filename == "[Content_Types].xml":
+                data = data.decode().replace(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet.main+xml",
+                    "application/vnd.ms-excel.sheet.macroEnabled.main+xml"
+                ).encode()
+            dst.writestr(item, data)
+        dst.writestr("xl/vbaProject.bin", b"\x00fake macro payload")
+
+    dest = str(tmp_path / "out.xlsx")
+    ops_fill.fill_ops(macro, dest, FIELDS, ROWS, SPOTS, defaults=DEFAULTS)
+
+    with zipfile.ZipFile(dest) as out:
+        assert not [n for n in out.namelist() if "vba" in n.lower()]
+        content_types = out.read("[Content_Types].xml").decode()
+        assert "macroEnabled" not in content_types
+        assert "vbaProject" not in content_types
