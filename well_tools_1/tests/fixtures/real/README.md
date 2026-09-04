@@ -11,6 +11,7 @@ prove a full, realistic report generation never changes unexpectedly.
 | Excel data | `data.xlsm` (or `.xlsx`) | The workbook you generate from — with the per-pipe `…Pipe` sheets, the `THICKNESS` sheet, and (if present) `intervals MAIN`. |
 | WellSchematic XML | `schematic.xml` | The schematic that drives config / depths / damage count. |
 | Images | `IMGS/` (a subfolder) | The photos/plots the template places (`proc`, `wh`, `raw`, damage photos, …). |
+| QC plots | `IMGS/qc.tif`, `IMGS/qc_continuous_border.tif` | Raw Warrior sheets for the QC-crop tests. The second one is a sheet whose page border runs unbroken down the whole page — the layout that broke detection in v0.2.4. Both tests skip if the file is absent. |
 | Settings | `inputs.json` | The non-file inputs — see below. |
 
 ### `inputs.json`

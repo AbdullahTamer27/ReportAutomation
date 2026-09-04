@@ -47,11 +47,16 @@ def make_sheet(data_height, width=400, legend_height=80, header_height=60,
     for name, h in rows:
         sheet[y, pad:width - pad] = 0                 # rule above the block
         if name == "data":
-            # The log's own frame: a rule down each side, meeting both rules.
-            sheet[y:y + h + 2, pad] = 0
-            sheet[y:y + h + 2, width - pad - 1] = 0
-            # Ink inside, so the block is not blank paper.
-            sheet[y + 1:y + 1 + h:3, pad + 20:width - pad - 20] = 60
+            # The log's own frame: a rule down each side, meeting both rules,
+            # plus track separators. The separators matter: they break every row
+            # of log data into segments, so no row of the log can pass for a
+            # full-width rule — exactly as on a real sheet.
+            edges = [pad, pad + (width - 2 * pad) // 3,
+                     pad + 2 * (width - 2 * pad) // 3, width - pad - 1]
+            for x in edges:
+                sheet[y:y + h + 2, x] = 0
+            for left_edge, right_edge in zip(edges, edges[1:]):
+                sheet[y + 1:y + 1 + h:3, left_edge + 3:right_edge - 3] = 60
         else:
             # Legend content: short runs of "text", never a line across the sheet.
             for row in range(y + 1, y + 1 + h, 7):
@@ -61,6 +66,13 @@ def make_sheet(data_height, width=400, legend_height=80, header_height=60,
         blocks[name] = (y, y + h + 1)                 # inclusive, rules included
         y += h + 2 + gap
     return sheet, blocks
+
+
+def inner(block):
+    """A block's content rows — what detection reports, since the rules
+    themselves are the separators between blocks, not part of one."""
+    top, bottom = block
+    return top + 1, bottom - 1
 
 
 def _tag_value_offset(data, wanted):
@@ -159,7 +171,7 @@ def test_detects_the_log_and_the_legend_above_it():
     arr, blocks = make_sheet(600)
     found = qc_plot.detect_blocks(arr)
 
-    assert (found["top"], found["bottom"]) == blocks["data"]
+    assert (found["top"], found["bottom"]) == inner(blocks["data"])
     # The crop starts at the line above the legend. The block's own top border
     # and the header's base sit a few pixels apart and read as one double rule,
     # so either row is right; landing inside the header would not be.
@@ -167,13 +179,13 @@ def test_detects_the_log_and_the_legend_above_it():
     assert found["warnings"] == []
 
 
-def test_detection_follows_the_frame_not_a_pixel_count():
+def test_detection_follows_the_sheet_not_a_pixel_count():
     """The same sheet at two vertical scales: the detected log must match each
-    one's own frame, which is the whole point of not calibrating."""
+    one's own block, which is the whole point of not calibrating."""
     for data_height in (300, 1200):
         arr, blocks = make_sheet(data_height)
         found = qc_plot.detect_blocks(arr)
-        assert (found["top"], found["bottom"]) == blocks["data"]
+        assert (found["top"], found["bottom"]) == inner(blocks["data"])
 
 
 def test_footer_legend_is_excluded():
@@ -193,8 +205,13 @@ def test_missing_legend_is_reported_not_hidden():
 
 
 def test_a_tiny_log_area_warns():
-    arr, _ = make_sheet(40, legend_height=300, header_height=300)
-    found = qc_plot.detect_blocks(arr)
+    """A log that occupies a sliver of the page is the shape of a bad detection,
+    so it gets flagged even though nothing about the scan actually failed."""
+    arr, _ = make_sheet(60, legend_height=40, header_height=40)
+    sheet = np.full((arr.shape[0] * 4, arr.shape[1], 3), 255, dtype=np.uint8)
+    sheet[:arr.shape[0]] = arr
+
+    found = qc_plot.detect_blocks(sheet)
     assert any("quarter" in w for w in found["warnings"])
 
 
@@ -218,9 +235,10 @@ def test_prepare_writes_the_cropped_png(tmp_path):
     with Image.open(out) as im:
         height = im.size[1]
     # Legend + log, starting somewhere on the double rule above the legend.
-    assert (blocks["data"][1] - blocks["legend"][0] + 1
+    log_bottom = inner(blocks["data"])[1]
+    assert (log_bottom - blocks["legend"][0] + 1
             <= height
-            <= blocks["data"][1] - blocks["header"][1] + 1)
+            <= log_bottom - blocks["header"][1] + 1)
     assert notes == []
 
 
@@ -229,8 +247,9 @@ def test_prepare_can_drop_the_legend(tmp_path):
     write_tiff(tmp_path / "qc.tif", arr, compression="tiff_lzw")
 
     qc_plot.prepare_qc_image(str(tmp_path), include_legend=False)
+    log_top, log_bottom = inner(blocks["data"])
     with Image.open(tmp_path / "qc.png") as im:
-        assert im.size[1] == blocks["data"][1] - blocks["data"][0] + 1
+        assert im.size[1] == log_bottom - log_top + 1
 
 
 def test_prepare_is_a_no_op_without_a_source(tmp_path):
@@ -276,11 +295,43 @@ def test_real_warrior_sheet(tmp_path):
     assert arr.shape == (4631, 1700, 3)
 
     found = qc_plot.detect_blocks(arr)
-    assert (found["top"], found["bottom"]) == (805, 4211)      # the log's frame
+    # The log block: from the rule under the legend down to the last row before
+    # the footer legend's own rule at 4225 — which is what keeps that second
+    # legend out of the picture.
+    assert (found["top"], found["bottom"]) == (805, 4224)
     assert (found["left"], found["right"]) == (24, 1679)
     assert found["legend_top"] == 397                          # the track legend
     assert found["warnings"] == []
 
     result = qc_plot.crop_plot(_REAL, str(tmp_path / "qc.png"))
     with Image.open(result["path"]) as im:
-        assert im.size == (1656, 3815)
+        assert im.size == (1656, 3828)
+
+
+_REAL_BORDER = os.path.join(os.path.dirname(_REAL), "qc_continuous_border.tif")
+
+
+@pytest.mark.skipif(not os.path.exists(_REAL_BORDER), reason="local-only fixture")
+def test_continuous_border_sheet_stops_before_the_repeated_footer_legend():
+    """The sheet that broke v0.2.4. Its page border runs unbroken from the header
+    to the foot, so following the tallest vertical line — what v0.2.4 did — ran
+    straight through the footer legend and into the picture, with every sanity
+    check still passing. Blocks can't be bridged that way: the footer legend is a
+    block of its own.
+
+    Both halves are asserted, because the fix is only meaningful against the
+    failure: the old signal must still be shown to span too far here."""
+    arr = qc_plot.read_image(_REAL_BORDER)
+    ink = arr.mean(axis=2) < 128
+
+    found = qc_plot.detect_blocks(arr)
+    footer_rule = next(b[0] for b in qc_plot._rule_rows(ink) if b[0] > found["bottom"])
+
+    # The old signal really does overshoot on this sheet...
+    _, old_bottom = qc_plot._tallest_vertical_rule(ink)
+    assert old_bottom > footer_rule
+    # ...and the block model stops short of the footer legend's own rule.
+    assert found["bottom"] < footer_rule
+    assert (found["top"], found["bottom"]) == (851, 3066)
+    assert found["legend_top"] == 397
+    assert found["warnings"] == []

@@ -223,10 +223,11 @@ def read_image(path):
 def _tallest_vertical_rule(ink):
     """``(top, bottom)`` of the tallest continuous run of ink in any column.
 
-    On a log sheet that is the frame drawn down the side of the data area, which
-    is exactly the extent we want — however tall the log happens to be. Columns
-    within 2% of the winner vote on the edges so a single ragged column of solid
-    colour cannot shift the answer."""
+    The fallback for a sheet drawn without full-width rules, where the frame down
+    the side of the data area is the only structure to go on. Columns within 2%
+    of the winner vote on the edges so a single ragged column of solid colour
+    cannot shift the answer. Not the primary signal: on a sheet whose page border
+    is unbroken, the tallest run is the border itself, and it spans everything."""
     height, width = ink.shape
     run = np.zeros(width, dtype=np.int32)
     best = np.zeros(width, dtype=np.int32)
@@ -246,13 +247,13 @@ def _tallest_vertical_rule(ink):
     return top, bottom
 
 
-def _rule_rows(ink, limit):
-    """Full-width horizontal rules above `limit`, as merged ``(start, end)``
-    bands so a double-line border counts once.
+def _rule_rows(ink, limit=None):
+    """Full-width horizontal rules (above `limit`, if given), as merged
+    ``(start, end)`` bands so a double-line border counts once.
 
     A rule has to be one *continuous* line across the sheet — a row of tightly
     packed legend text can easily be 60% ink, but it is 60% ink in short bursts."""
-    band = ink[:limit]
+    band = ink[:limit] if limit is not None else ink
     if not band.size:
         return []
     run = np.zeros(band.shape[0], dtype=np.int32)
@@ -271,29 +272,58 @@ def _rule_rows(ink, limit):
     return [tuple(b) for b in bands]
 
 
+def _trim_blank(marked, top, bottom):
+    """Shrink ``(top, bottom)`` past any blank rows at either end."""
+    used = np.where(marked[top:bottom + 1].any(axis=1))[0]
+    if not len(used):
+        return top, bottom
+    return top + int(used.min()), top + int(used.max())
+
+
 def detect_blocks(arr):
     """Locate the log and the legend above it.
 
     Returns ``{top, bottom, left, right, legend_top, warnings}`` — all row/column
     indices into `arr`, inclusive. `top`/`bottom` bound the log; `legend_top` is
-    where the track legend starts (equal to `top` when no legend was found)."""
+    where the track legend starts (equal to `top` when no legend was found).
+
+    The sheet is read as a stack of blocks separated by full-width rules, and the
+    log is the tallest of them. Keying on the horizontal rules rather than the
+    log's side frame matters: on sheets whose page border runs unbroken from the
+    header to the foot, the side frame is one continuous line down the whole
+    page, and following it swallows the legend Warrior repeats at the bottom.
+    Blocks can't do that — the footer legend is a block of its own."""
     height, width, _ = arr.shape
     grey = arr.mean(axis=2)
     ink = grey < _INK
+    marked = grey < _BLANK
 
-    top, bottom = _tallest_vertical_rule(ink)
+    bands = _rule_rows(ink)
+    # Blocks are the gaps between consecutive rules; the log is the tallest.
+    blocks = [(bands[i][1] + 1, bands[i + 1][0] - 1, i)
+              for i in range(len(bands) - 1)
+              if bands[i + 1][0] - 1 > bands[i][1] + 1]
+
+    legend_top = None
+    if blocks:
+        top, bottom, above = max(blocks, key=lambda b: b[1] - b[0])
+        top, bottom = _trim_blank(marked, top, bottom)
+        # The legend is the block directly above the log, so the crop starts at
+        # that block's own top rule.
+        if above >= 1:
+            legend_top = bands[above - 1][0]
+    else:
+        # A sheet drawn without rules: fall back to the log's side frame.
+        top, bottom = _tallest_vertical_rule(ink)
 
     # Horizontal extent: everything that is not blank paper beside the log.
-    marked = grey[top:bottom + 1] < _BLANK
-    columns = np.where(marked.any(axis=0))[0]
+    columns = np.where(marked[top:bottom + 1].any(axis=0))[0]
     if not len(columns):
         raise QcPlotError("the detected log area is blank")
     left, right = int(columns.min()), int(columns.max())
 
-    # The legend is the band between the last two rules above the log: the lower
-    # rule is the legend's own base, the upper one is its top border.
-    bands = _rule_rows(ink, top)
-    legend_top = bands[-2][0] if len(bands) >= 2 else top
+    if legend_top is None:
+        legend_top = top
 
     warnings = []
     if (bottom - top + 1) < height * 0.25:

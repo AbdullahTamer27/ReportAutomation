@@ -298,14 +298,14 @@ they are hard for different reasons.
 Crop the raw Warrior sheet to the track legend + the log, dropping the branding
 block at the top and the legend Warrior repeats at the foot.
 
-**Locked decision: structural, not calibrated.** The crop follows the drawn frame
-— the log is found as the tallest continuous vertical rule on the sheet — so it
-holds at any vertical scale, depth or track count without ever reading the
+**Locked decision: structural, not calibrated.** The sheet is read as a stack of
+blocks separated by full-width rules, and the log is the tallest of them — so the
+crop holds at any vertical scale, depth or track count without ever reading the
 plot's scale. Depth-based cropping (a window in feet) was considered and
 deferred: it needs the `1:5000` line read off the sheet, and nothing asks for it
 yet. The sheet *does* print its scale, so that door stays open.
 
-Two things worth remembering from building it:
+Three things worth remembering from building it:
 - **Warrior TIFFs do not decode.** The LZW strip carries no EOI terminator and
   the final row is truncated, so libtiff — and with it Pillow, `sips` and Preview
   — rejects the file outright. `well_tools/report/qc_plot.py` carries its own
@@ -313,6 +313,11 @@ Two things worth remembering from building it:
 - **Detection cannot verify itself**, so it reports what it could not confirm as
   a report note and places the picture anyway. Being told at generation time
   beats finding out from the client.
+- **Following the log's side frame was the wrong signal**, and it shipped in
+  v0.2.4. On a sheet whose page border runs unbroken from the header to the
+  foot, the tallest vertical line *is* that border, so the crop swallowed the
+  footer legend — silently, since every sanity check still passed. Horizontal
+  rules partition the sheet into blocks that a continuous border cannot bridge.
 
 ### D2 — Main vs Repeat *(next)*
 Not a crop: two logging passes shown against each other. Open questions — are
