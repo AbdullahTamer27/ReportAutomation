@@ -15,7 +15,9 @@ to surface them. No FastAPI, no database, no request objects here.
 import os
 from datetime import datetime
 
-from well_tools.report.report_builder import build_automation_report  # noqa: F401
+from well_tools.report.report_builder import (  # noqa: F401
+    build_automation_report, resolve_image_folder,
+)
 from well_tools.report.pipe_config import (
     build_pipe_model, ConfigParseError, sizes_with_label, pipe_config_phrase,  # noqa: F401
 )
@@ -195,6 +197,24 @@ def generate(*, template_path, company_name, company_logo_path,
         except Exception as e:  # noqa: BLE001
             log(f"Raw Data write failed: {e}")
             notes.append(f"⚠ Raw Data not written — {e}")
+
+    # One-page summary: only when the template asks for it. Building it writes
+    # ops.png into the images folder, which the report's image pass then places
+    # against {{ops}} like any other picture.
+    from .introspect import extract_tags
+    from . import ops_service
+    try:
+        if ops_service.wanted(extract_tags(template_path)):
+            ops_service.build(
+                working_dir=working_dir,
+                img_folder=resolve_image_folder(working_dir),
+                xml_path=xml_path, excel_path=excel_path,
+                pipe_model=pipe_model, fields=fields,
+                well_name=fields.get("well_name"),
+                notes=notes, progress=log)
+    except Exception as e:  # noqa: BLE001 — the summary never fails a report
+        log(f"One-page summary failed: {e}")
+        notes.append(f"⚠ One-page summary not built — {e}")
 
     output_path = build_automation_report(
         word_template_path=template_path,

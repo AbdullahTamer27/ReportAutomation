@@ -33,6 +33,9 @@ TAG_TO_FILE = {
     # Written by the qc_plot pass from the raw Warrior sheet (qc.tif) before
     # this one runs; a hand-cropped qc.png is used as-is.
     "{{qc}}":     "qc.png",
+    # The one-page summary, rendered from the OPS workbook before this pass. If
+    # Excel could not make it the tag simply goes unfilled, with a note.
+    "{{ops}}":    "ops.png",
 }
 
 # Per-damage image tags: {{DMG<i>_<j>}} -> file "DMG<i>_<j>.<ext>".

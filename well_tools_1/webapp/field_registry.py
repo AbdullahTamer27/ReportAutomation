@@ -119,6 +119,9 @@ _NON_USER_EXACT = {
     "{{damage_block_start}}", "{{damage_block_end}}",
     # Image-slot tags: the picture comes from the images folder, not the form.
     "{{proc}}", "{{tempgr}}", "{{wh}}", "{{raw}}", "{{well}}", "{{ts}}", "{{qc}}",
+    # {{ops}} is an image slot too — and it doubles as the switch that tells the
+    # form to offer the OPS workbook's own fields.
+    "{{ops}}",
 }
 _NON_USER_PREFIXES = ("{{highest_", "{{joints_", "{{pie_", "{{ovl", "{{DMG")
 _ROLE_TAG = re.compile(r"^\{\{\w+Pipe_")     # firstPipe_name, secondPipe_suffix, …
