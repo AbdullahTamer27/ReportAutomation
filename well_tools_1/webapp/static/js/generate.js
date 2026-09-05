@@ -135,32 +135,151 @@ function noteBody(text) {
   return hit ? t.slice(hit[0].length).replace(/^[️\s]+/, "") : t;
 }
 
+// The buckets, in the order a person needs them: what stops the report, what
+// deserves a look, what Talos already handled, and everything else.
+const NOTE_GROUPS = [
+  { cls: "note-error", label: "Must fix" },
+  { cls: "note-warn", label: "Check" },
+  { cls: "note-fix", label: "Talos fixed it" },
+  { cls: "note-info", label: "Details" },
+];
+
+// The per-joint checks fire once per joint, so one rough string can push forty
+// near-identical lines into the panel and bury the two notes that matter. They
+// all share this shape, which is what lets them be folded together:
+//   9 5/8" CSG joint 47: negative Wall Thickness (-0.03)
+//   ^ subject           ^ joint  ^ detail
+const JOINT_NOTE = /^(.+?)\s+joint\s+([^:]+):\s*(.+)$/i;
+
+// Crude on purpose: two joints of the same kind differ only in their numbers,
+// so blanking the numbers is enough to bucket them. Never shown to anyone —
+// the label a person reads comes from commonLabel().
+function kindKey(detail) {
+  return detail.replace(/-?\d[\d.,]*/g, "#").replace(/\s+/g, " ").trim();
+}
+
+// What the notes in a group literally share, with whatever varies between them
+// replaced by an ellipsis. Deriving the label from the notes themselves rather
+// than from a table of known messages means a new check reads correctly here
+// the day it is written, with nothing to keep in step.
+//   "Max Loss 87.3% exceeds 100%"  ->  "Max Loss … exceeds 100%"
+// Punctuation the varying tokens share is itself shared text, and dropping it
+// leaves an ellipsis holding half a bracket — "(-0.03)" and "(-0.01)" must fold
+// to "(…)", not "…)". Brackets lead, units and separators trail.
+function shared(tokens, pattern) {
+  const ends = tokens.map((t) => (String(t ?? "").match(pattern) || [""])[0]);
+  return ends.every((e) => e === ends[0]) ? ends[0] : "";
+}
+
+function commonLabel(details) {
+  if (details.length === 1) return details[0];
+  const parts = details.map((d) => d.split(/(\s+)/));
+  return parts[0]
+    .map((token, i) => {
+      if (parts.every((p) => p[i] === token)) return token;
+      const varying = parts.map((p) => p[i]);
+      return shared(varying, /^[([{]+/) + "…" + shared(varying, /[)\]}%,.;:]+$/);
+    })
+    .join("")
+    .replace(/…(?:\s*…)+/g, "…")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// One entry per distinct issue, each carrying the notes it stands for.
+function rollup(notes) {
+  const groups = new Map();
+  for (const text of notes) {
+    const m = text.match(JOINT_NOTE);
+    // Only the per-joint checks repeat; everything else stands on its own.
+    // JSON rather than concatenation: a subject and a kind joined by any
+    // separator can collide once the separator appears inside either of them.
+    const key = m ? JSON.stringify(["joint", m[1], kindKey(m[3])])
+                  : JSON.stringify(["one", text]);
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { subject: m ? m[1] : "", details: [], notes: [] }));
+    g.details.push(m ? m[3] : text);
+    g.notes.push(text);
+  }
+  return [...groups.values()].map((g) => ({
+    notes: g.notes,
+    label: g.notes.length === 1
+      ? g.notes[0]
+      : `${g.subject ? g.subject + " — " : ""}${commonLabel(g.details)}`,
+  }));
+}
+
+function renderGroup(group, notes) {
+  const rolled = rollup(notes);
+  const items = rolled
+    .map((item) => {
+      const body = item.notes.length === 1
+        ? escapeHtml(item.label)
+        : `<details class="note-roll">
+             <summary>${escapeHtml(item.label)}
+               <span class="note-times">${item.notes.length}×</span></summary>
+             <ul>${item.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
+           </details>`;
+      return `<li class="${group.cls}">${body}</li>`;
+    })
+    .join("");
+  // Only what blocks the report opens itself; the verdict above already says
+  // the others are there, so they cost one line each until asked for.
+  const open = group.cls === "note-error" ? " open" : "";
+  return `<details class="notes-group"${open}>
+      <summary>${group.label}<span class="notes-count">${rolled.length}</span></summary>
+      <ul class="notes-list">${items}</ul>
+    </details>`;
+}
+
+// One line, always visible, counting distinct issues rather than raw notes —
+// "43 things to check" is true of forty joints on one string and useless.
+function verdict(counts) {
+  if (counts.error) {
+    return ["note-error",
+      `${counts.error} thing${counts.error === 1 ? "" : "s"} to fix before sending.`];
+  }
+  if (counts.warn) {
+    return ["note-warn",
+      `${counts.warn} thing${counts.warn === 1 ? "" : "s"} to check before sending.`];
+  }
+  if (counts.fix) {
+    return ["note-fix",
+      `Nothing to check — Talos corrected ${counts.fix} value${counts.fix === 1 ? "" : "s"}.`];
+  }
+  return ["note-ok", "Nothing to check."];
+}
+
 function renderNotes(notes) {
   if (!Array.isArray(notes) || notes.length === 0) return "";
-  const issues = notes.filter((n) => noteClass(n) !== "note-info").length;
-  const items = notes
-    .map((n) => `<li class="${noteClass(n)}">${escapeHtml(noteBody(n))}</li>`)
+  const buckets = new Map(NOTE_GROUPS.map((g) => [g.cls, []]));
+  for (const n of notes) buckets.get(noteClass(n)).push(noteBody(n));
+
+  const counts = {
+    error: rollup(buckets.get("note-error")).length,
+    warn: rollup(buckets.get("note-warn")).length,
+    fix: rollup(buckets.get("note-fix")).length,
+  };
+  const [cls, text] = verdict(counts);
+  const sections = NOTE_GROUPS
+    .filter((g) => buckets.get(g.cls).length)
+    .map((g) => renderGroup(g, buckets.get(g.cls)))
     .join("");
-  const label = issues
-    ? `Report notes — ${issues} warning${issues === 1 ? "" : "s"}`
-    : `Report notes (${notes.length})`;
-  return `<details class="notes-panel"${issues ? " open" : ""}>
-    <summary>${label}</summary>
-    <ul class="notes-list">${items}</ul>
-  </details>`;
+
+  return `<div class="notes-panel">
+      <p class="notes-verdict ${cls}">${escapeHtml(text)}</p>
+      ${sections}
+    </div>`;
 }
 
 function showSuccess(data) {
   hide(els.status);   // result + notes now live on the right, above the preview
-  const issues = (data.notes || []).filter((n) => noteClass(n) !== "note-info").length;
-  const heading = issues
-    ? `Report created · ${issues} warning${issues === 1 ? "" : "s"}`
-    : "Report created";
   els.previewPanel.hidden = false;
   els.previewResult.innerHTML =
+    // The heading no longer counts anything — the verdict line inside the notes
+    // does, from the same rollup, so the two can't disagree.
     `<div class="status success">
-       <strong>${heading}</strong>
-       <div class="result-path">${escapeHtml(data.output_path)}</div>
+       <strong>Report created</strong>
        <button id="revealBtn" type="button" class="secondary">Reveal in file manager</button>
        ${renderNotes(data.notes)}
      </div>`;

@@ -197,11 +197,22 @@ def test_scalar_tags_substitute_inside_their_sentence(tmp_path):
     assert "•Log Date:15-May-2026." in values
 
 
-def test_a_row_whose_tags_are_all_empty_is_dropped(tmp_path):
-    """No workover recorded means no workover line at all."""
+def test_a_field_nobody_filled_in_reads_na(tmp_path):
+    """The line stays and says N/A. An empty slot cannot be told apart from a
+    line the renderer forgot; "N/A" states plainly that nothing was given."""
     layout = layout_for(tmp_path)
     values = [str(c.value) for row in layout.rows for c in row.cells.values()]
-    assert not any("Workover" in v for v in values)
+    assert "•Latest Workover Date:N/A." in values
+
+
+def test_a_field_given_as_na_is_left_as_na(tmp_path):
+    """Typing "n/a" into the form and leaving it blank say the same thing."""
+    from well_tools.report.ops_render import _fill_scalars, read_layout
+
+    layout = read_layout(make_template(tmp_path))
+    _fill_scalars(layout, dict(FIELDS, last_wko="n/a"), DEFAULTS)
+    values = [str(c.value) for row in layout.rows for c in row.cells.values()]
+    assert "•Latest Workover Date:N/A." in values
 
 
 def test_a_blank_rig_says_rigless(tmp_path):

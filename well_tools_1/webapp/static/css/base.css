@@ -4,8 +4,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
-html { background: var(--bg); }
+html { height: 100%; background: var(--bg); }
 
 body {
   margin: 0;
@@ -19,6 +18,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* min-height, NOT height: a fixed 100% pins the body box to the viewport, and
+     content taller than that overflows it — so the page scrolls to the content's
+     own bottom edge and the padding below is never reachable. The last
+     --footer-h of the page then sits behind the fixed footer at max scroll, with
+     nothing left to scroll. Growing the box puts the padding back in the
+     document's height, where it can do its job. */
+  min-height: 100%;
   /* Bottom padding must clear the fixed footer, or the last of the page sits
      behind it at max scroll. Derived from --footer-h so it can't drift. */
   padding: calc(var(--topbar-h) + 32px) 22px calc(var(--footer-h) + 28px);

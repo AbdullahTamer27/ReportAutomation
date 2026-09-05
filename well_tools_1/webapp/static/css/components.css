@@ -155,6 +155,8 @@ button:focus-visible {
 .status.error   { background: var(--error-bg);   color: var(--error-fg);   border-color: var(--error-bd); }
 .status .secondary { margin-top: 12px; }
 
+/* Still used by the ghost-merge result; the report panel drops the path and
+   keeps only the reveal button, so the preview below it gets the height. */
 .result-path {
   margin: 9px 0 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -164,20 +166,71 @@ button:focus-visible {
   opacity: 0.92;
 }
 
-/* ===== Report notes panel ===== */
+/* ===== Report notes panel =====
+   Three things, in this order: a verdict that is always readable, then one
+   collapsed section per severity, then the notes themselves. Only "Must fix"
+   opens on its own — the verdict already says the rest are there, so they cost
+   a line each until someone asks, and the preview below keeps the height. */
 .notes-panel {
   margin-top: 14px;
   border-top: 1px solid var(--border-strong);
   padding-top: 10px;
 }
-.notes-panel > summary {
+.notes-verdict {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.notes-group + .notes-group { margin-top: 4px; }
+.notes-group > summary {
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-dim);
   list-style: revert;
   user-select: none;
+  padding: 2px 0;
 }
+.notes-count {
+  margin-left: 7px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* A folded run of near-identical notes: the shared wording, a count, and the
+   originals one click away. */
+.note-roll > summary {
+  cursor: pointer;
+  list-style: revert;
+  user-select: none;
+}
+.note-times {
+  margin-left: 6px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.note-roll > ul {
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 0 0 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* The outer <li> already carries the severity marker and chip background; the
+   originals nested inside it must not repeat either. Both selectors out-specify
+   `.notes-list li` (0,1,2) so they win wherever this block sits in the file —
+   the same trap the severity markers below document. */
+.notes-list .note-roll > ul > li {
+  padding: 2px 0;
+  background: none;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.notes-list .note-roll > ul > li::before { content: none; }
 .notes-list {
   list-style: none;
   margin: 10px 0 0;

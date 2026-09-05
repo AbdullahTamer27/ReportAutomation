@@ -64,6 +64,9 @@ class OpsRenderError(Exception):
 # Stated on every well, whatever the data says.
 TEMPERATURE_NOTE = "Temperature anomaly observed across the logging interval."
 
+# What a well-information field reads when nobody filled it in.
+_MISSING = "N/A"
+
 
 def _thickness(value):
     """Nominal thickness to three decimals — 0.250, not 0.25. The trailing zero
@@ -340,41 +343,37 @@ def read_layout(path):
 # Filling
 # --------------------------------------------------------------------------
 def _substitute(text, values, defaults):
-    """Replace the tags in one cell's text. Returns ``(text, any value found)``;
-    a cell whose tags are all empty is dropped, so a well with no workover shows
-    no workover line rather than "Latest Workover Date: "."""
-    found = False
+    """Replace the tags in one cell's text.
+
+    A field nobody filled in reads ``N/A``. Dropping the line instead — which is
+    what this used to do — leaves the reader unable to tell "no workover was ever
+    performed" from "the line is missing", and a summary that quietly omits what
+    it doesn't know is worse than one that says so.
+
+    A tag carrying a registry default takes that first: a blank ``{{RIG}}`` is a
+    rigless job, which is a fact, not an absence."""
     for name in _TAG.findall(text):
         value = str(values.get(name.lower(), "") or "").strip()
         if value.upper() == "N/A":
             value = ""
         if not value:
-            value = str(defaults.get(name.lower(), "") or "")
-        if value:
-            found = True
-        text = text.replace("{{%s}}" % name, value)
-    return text, found
+            value = str(defaults.get(name.lower(), "") or "").strip()
+        text = text.replace("{{%s}}" % name, value or _MISSING)
+    return text
 
 
 def _fill_scalars(layout, fields, defaults):
-    """Substitute the single-value tags, dropping rows that come back empty."""
+    """Substitute the single-value tags. Every row is kept — see `_substitute`."""
     values = {str(k).lower(): v for k, v in fields.items()}
     defaults = {str(k).lower(): v for k, v in (defaults or {}).items()}
     block_tags = set(STRINGS_TAGS) | set(HOTSPOT_TAGS) | {CONCLUSION_TAG}
 
-    kept = []
     for row in layout.rows:
-        tags = [t for t in row.tags()]
-        if tags and not any(t in block_tags for t in tags):
-            any_value = False
-            for cell in row.cells.values():
-                if isinstance(cell.value, str) and "{{" in cell.value:
-                    cell.value, found = _substitute(cell.value, values, defaults)
-                    any_value = any_value or found
-            if not any_value:
-                continue                      # nothing to say — drop the row
-        kept.append(row)
-    layout.rows = kept
+        if any(t in block_tags for t in row.tags()):
+            continue                          # grown later, from real data
+        for cell in row.cells.values():
+            if isinstance(cell.value, str) and "{{" in cell.value:
+                cell.value = _substitute(cell.value, values, defaults)
 
 
 def _widen_for_content(layout, column, rows, limit=1.5):
