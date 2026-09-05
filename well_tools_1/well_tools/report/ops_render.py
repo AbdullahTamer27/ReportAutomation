@@ -110,6 +110,18 @@ def sort_strings(rows):
                                        -_od_value(r.get("Pipe OD"))))
 
 
+def sort_hotspots(hotspots):
+    """The hot spots in the same order as the completion strings.
+
+    They arrive in the pipe model's order, which follows the *configuration
+    string* — and that is conventionally written inner→outer, so leaving it
+    alone puts the tubing first and the biggest casing last. The summary reads
+    largest-first with the tubing last, like every other table in the report."""
+    return sorted(hotspots,
+                  key=lambda h: (_is_tubing(h.get("pipe", {}).get("suffix")),
+                                 -_od_value(h.get("pipe", {}).get("suffix"))))
+
+
 def conclusion(pipe, grade):
     """One conclusions line, e.g. "Moderate metal loss detected across the
     7 5/8" liner string." — using the severity word the rest of the report uses,
@@ -644,6 +656,10 @@ def render_ops(template_path, dest_path, fields, pipe_summary_rows, hotspots,
     if first is not None and "str_od" in columns:
         _widen_for_content(layout, columns["str_od"], range(first, first + count))
         _merge_repeated(layout, first, count, columns["str_od"])
+
+    # Largest first, tubing last — the same order as the strings table above.
+    # The conclusions are built from this list, so they follow it.
+    hotspots = sort_hotspots(list(hotspots))
 
     hs_columns = {}
     for tag in HOTSPOT_TAGS:

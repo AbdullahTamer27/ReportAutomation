@@ -322,3 +322,47 @@ def test_the_template_is_never_modified(tmp_path):
     ops_render.render_ops(path, str(tmp_path / "ops.png"), FIELDS, ROWS, SPOTS,
                           defaults=DEFAULTS)
     assert open(path, "rb").read() == before
+
+
+# --------------------------------------------------------------------------
+# Ordering
+# --------------------------------------------------------------------------
+def test_hot_spots_are_ordered_largest_first_whatever_the_config_says():
+    """Hot spots arrive in the pipe model's order, which follows the
+    *configuration string* — and that is conventionally written inner→outer. Left
+    alone it puts the tubing first and the biggest casing last, which is how this
+    shipped reversed. The strings table was never affected because it sorts
+    explicitly; this one did not."""
+    from well_tools.report.pipe_config import parse_config
+
+    pipes = parse_config("4.5x3.5TBG-7LNR-9.625-13.375-18.625")   # inner → outer
+    assert [p["suffix"] for p in pipes][0].endswith("TBG")        # as handed over
+
+    spots = [{"pipe": p, "grade": "B"} for p in pipes]
+    ordered = [s["pipe"]["suffix"] for s in ops_render.sort_hotspots(spots)]
+    assert ordered == ['18 5/8" CSG', '13 3/8" CSG', '9 5/8" CSG', '7" LNR',
+                       '4 1/2" × 3 1/2" TBG']
+
+
+def test_conclusions_follow_the_hot_spot_order(tmp_path):
+    """They are built from the sorted list, so the two cannot disagree."""
+    from well_tools.report.pipe_config import parse_config
+
+    pipes = parse_config("4.5TBG-7LNR-9.625")
+    spots = [{"pipe": p, "grade": "C", "max_loss": "11.2", "depth": "1"}
+             for p in pipes]
+    lines = [ops_render.conclusion(s["pipe"], s["grade"])
+             for s in ops_render.sort_hotspots(spots)]
+    assert '9 5/8" casing' in lines[0]
+    assert '4 1/2" tubing' in lines[-1]
+
+
+def test_hot_spot_and_string_orders_agree():
+    """Both tables list the same pipes; they must not list them differently."""
+    strings = [{"Pipe OD": '4 1/2" TBG'}, {"Pipe OD": '9 5/8" CSG'},
+               {"Pipe OD": '7" LNR'}]
+    spots = [{"pipe": {"suffix": '4 1/2" TBG', "type": "TBG"}},
+             {"pipe": {"suffix": '9 5/8" CSG', "type": "CSG"}},
+             {"pipe": {"suffix": '7" LNR', "type": "LNR"}}]
+    assert ([r["Pipe OD"] for r in ops_render.sort_strings(strings)]
+            == [s["pipe"]["suffix"] for s in ops_render.sort_hotspots(spots)])
