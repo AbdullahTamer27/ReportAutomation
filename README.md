@@ -36,6 +36,7 @@ It bundles two tools:
 - 🧭 **XML-driven layout** — give it a WellSchematic XML and it derives the configuration **inner→outer** (consolidating weight-change sections), sets the **bottom depth** from the deepest point, overrides each pipe's **shoe / liner-hanger depth** from the schematic, and **auto-counts the damages** (worst Class C/D per interval per pipe, clustered by depth). The channel for each damage callout is read from the workbook's THICKNESS sheet.
 - 📄 **Schematic-PDF pre-fill** — load a Well Cross Section Plot PDF to auto-fill the optional fields (well name, type, original completion, last workover) for review before generating.
 - 🖼️ **Borderless image placement** — images are sized to fit their cells with a clean border drawn on the picture; damage photos scale by N damage points, via a repeatable block **or** static `{{DMGi_j}}` slots.
+- 📋 **One-page summary** — a `{{ops}}` picture drawn from the well's own data: completion strings, a hot-spot table coloured by grade, and the conclusions, set beside the processed log. Its design lives in an Excel template (`OPS.xlsx`) whose column widths, row heights, fonts, fills and merges are read and redrawn — so the layout is edited in Excel, but **Excel never runs**. Tables grow to fit the well, a pipe spanning several weight sections has its OD merged across them, and the log half always ends level with the panel.
 - 📉 **Auto-cropped QC plot** — the raw Warrior log sheet (`qc.tif`) is cropped to the legend + log, dropping the branding block and the legend Warrior repeats at the foot. The sheet is read as a stack of blocks separated by full-width rules and the log is the tallest of them, so it works at any vertical scale, depth or track count — and Warrior's TIFFs, which Pillow flatly refuses to decode, are read anyway.
 - 🏢 **Company branding** — pick a registered company; its logo fills the `{{COMP}}` body table **and** swaps the logo in every section header, while `{{COMPNAME}}` writes the name.
 - 📝 **Well-metadata tags** — `{{well_name}}`, `{{well_type}}`, `{{btm_depth}}`, `{{field}}`, `{{log_date}}`, `{{orig_comp}}`, `{{last_wko}}`, plus an auto `{{delivery_date}}`, with dates normalized to `DD-Mon-YYYY` (e.g. `09-Sep-2020`).
@@ -80,6 +81,8 @@ ReportAutomation/
             ├── pipe_sections.py  # Repeats/removes per-pipe sections; cleans conclusion lines
             ├── tables.py         # Tagged tables (joints / highest / SUMMARY)
             ├── charts.py         # Per-pipe metal-loss pie charts (matplotlib)
+            ├── ops_render.py     # One-page summary: reads the Excel design, draws it without Excel
+            ├── qc_plot.py        # Crops the Warrior QC sheet (and decodes TIFFs Pillow rejects)
             ├── damage_select.py  # Auto damage count: worst C/D per interval per pipe, clustered
             ├── overlays.py       # Floating text-box overlays (well-head / shoe / hanger / damage)
             ├── schematic.py      # Extracts well metadata from a schematic PDF

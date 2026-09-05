@@ -291,8 +291,8 @@ they are hard for different reasons.
 | Picture | Status | Why it's hard |
 | ------- | ------ | ------------- |
 | **QC plot** (`{{qc}}`) | ✅ done | Cropping a log sheet whose geometry changes every report |
+| **One-page summary** (`{{ops}}`) | ✅ done | Composed, not cropped — drawn from the data beside the `proc` log |
 | **Main vs Repeat** | ◻ | Two passes to align and compare, not one picture to crop |
-| **One-page summary** | ◻ | Composed, not cropped — it has to be *drawn* from the data |
 
 ### D1 — QC plot ✅
 Crop the raw Warrior sheet to the track legend + the log, dropping the branding
@@ -325,8 +325,42 @@ they two separate sheets or two track sets on one? What does "aligned" mean when
 the passes cover different depth ranges? The Warrior header prints the pass name
 (the sample reads **MAIN PASS**), which is the obvious discriminator.
 
-### D3 — One-page summary
-The odd one out: nothing to crop, because the picture doesn't exist yet — it has
-to be composed from data the engine already holds (pipe model, damage clusters,
-grades). Closer to the pie-chart pass than to the QC pass. Needs a worked example
-of the intended layout before anything can be designed.
+### D3 — One-page summary ✅
+The odd one out: nothing to crop, because the picture doesn't exist — it is
+composed from data the engine already holds, beside the `proc` log image.
+
+**Locked decision: the Excel template is the design; the renderer never runs
+Excel.** `webapp/data/ops/OPS.xlsx` is a hand-formatted sheet carrying `{{tags}}`.
+`well_tools/report/ops_render.py` reads its column widths, row heights, fonts,
+fills, borders and merges with openpyxl and redraws them with PyMuPDF. The
+template is only ever *read*, so the design stays somewhere it can be seen and
+adjusted, while nothing depends on Office.
+
+Getting there cost three attempts, and the discarded two are the reason for the
+third:
+
+1. **Draw it from scratch** (`ops_panel`) — close to the design but never
+   exactly it, because the design lived in code.
+2. **Fill the workbook and let Excel render it** (`ops_fill` + `ops_export`) —
+   abandoned after it broke in three separate ways. openpyxl does not move merged
+   ranges with an inserted row, and the obvious repair (unmerge, remerge) blanks
+   the cells that just moved. The authored template was macro-enabled, so a
+   workbook saved as `.xlsx` carried macro content types and Excel refused to
+   open it — which also killed the picture, since the export handed Excel that
+   very file. And converting the template by editing its zip produced something
+   openpyxl accepted and Excel did not.
+3. **Read the design, draw it ourselves** — the current one. Every problem above
+   was incidental to *writing* `.xlsx` files. Growing a table is a list insertion
+   in an in-memory model: the rows below simply move and there is nothing to
+   repair.
+
+Worth remembering:
+- **The log sets the width of its own half.** Anchored to a cell range in Excel
+  it can never end level with a panel whose height depends on the well; drawn at
+  the panel's full height and its own proportions, the two halves always finish
+  together.
+- **The template cannot know a well's string names.** A tapered
+  `4 1/2" × 3 1/2" × 2 7/8" TBG` is far longer than `7" CSG`, so the Pipe OD
+  column widens for the labels actually present, capped at 1.5×.
+- **A trailing newline in a cell counts as a second line** and pushes text off
+  its own vertical alignment. Excel shows it as nothing; it is stripped on read.

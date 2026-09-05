@@ -1,17 +1,14 @@
 """Wiring the one-page summary into a report run.
 
-The picture's last step needs Excel on Windows, so it cannot run here. What
-*can* be pinned is everything around it — and the thing most worth pinning is
-that none of it can fail a report. A missing schematic, a locked file, no Excel
-at all: each leaves the run intact and says what happened.
+What matters here is that none of it can fail a report. A missing schematic, an
+unreadable workbook, a template that won't parse: each becomes a note, and the
+report is still produced. The summary is worth having; it is not worth losing a
+report over.
 """
 
 import os
 
-import pytest
-
 from webapp import ops_service
-from well_tools.report import ops_export
 
 
 def test_the_summary_is_only_built_when_the_template_asks():
@@ -21,7 +18,7 @@ def test_the_summary_is_only_built_when_the_template_asks():
 
 
 def test_defaults_come_from_the_field_registry():
-    """The workbook and the Word document have to word a blank field the same,
+    """The summary and the Word document have to word a blank field the same,
     so neither side keeps its own copy of "RIGLESS"."""
     from webapp.field_registry import by_key
 
@@ -40,10 +37,10 @@ def test_the_tag_resolves_to_the_file_the_service_writes():
 def test_a_missing_schematic_is_a_note_not_a_failure(tmp_path):
     notes = []
     result = ops_service.build(
-        working_dir=str(tmp_path), img_folder=str(tmp_path),
-        xml_path=None, excel_path=None, pipe_model=[], fields={}, notes=notes)
+        img_folder=str(tmp_path), xml_path=None, excel_path=None,
+        pipe_model=[], fields={}, notes=notes)
 
-    assert result == {"workbook": None, "image": None}
+    assert result is None
     assert any("schematic" in n for n in notes)
 
 
@@ -54,100 +51,70 @@ def test_unreadable_inputs_are_a_note_not_a_failure(tmp_path):
 
     notes = []
     result = ops_service.build(
-        working_dir=str(tmp_path), img_folder=str(tmp_path), xml_path=str(xml),
+        img_folder=str(tmp_path), xml_path=str(xml),
         excel_path=str(tmp_path / "nope.xlsx"), pipe_model=[], fields={},
         notes=notes)
 
-    assert result == {"workbook": None, "image": None}
+    assert result is None
     assert any("One-page summary not built" in n for n in notes)
 
 
-def test_without_excel_the_workbook_is_still_handed_over(tmp_path, monkeypatch):
-    """The picture needs Excel; the numbers don't. When the render is impossible
-    the filled workbook is still written and the note says to paste it — which
-    is the workflow that existed before any of this was automated."""
-    calls = {}
+def test_a_broken_template_is_a_note_not_a_failure(tmp_path, monkeypatch):
+    """The renderer refusing the template must not take the report with it."""
+    import types
 
-    def fake_fill(template, dest, *a, **kw):
-        calls["dest"] = dest
-        open(dest, "wb").write(b"xlsx")
-        return {"path": dest, "warnings": [], "stray_images": 0}
+    from well_tools.report import ops_render
 
-    monkeypatch.setattr(ops_service.ops_fill, "fill_ops", fake_fill)
+    monkeypatch.setattr("well_tools.core.xml_parser.parse_wellschematic_xml",
+                        lambda p: None)
+    monkeypatch.setattr("well_tools.core.xml_parser.build_pipe_summary",
+                        lambda d: types.SimpleNamespace(to_dict=lambda how: []))
+    monkeypatch.setattr("well_tools.report._wbcache.load", lambda *a, **k: None)
     monkeypatch.setattr(ops_service, "collect_hotspots", lambda *a, **k: [])
     monkeypatch.setattr(
-        ops_service.ops_export, "render",
+        ops_render, "render_ops",
         lambda *a, **k: (_ for _ in ()).throw(
-            ops_export.OpsExportError("needs Microsoft Excel on Windows")))
+            ops_render.OpsRenderError("the OPS template is empty")))
 
+    xml = tmp_path / "s.xml"
+    xml.write_text("<x/>")
+    notes = []
+    assert ops_service.build(img_folder=str(tmp_path), xml_path=str(xml),
+                             excel_path="x", pipe_model=[], fields={},
+                             notes=notes) is None
+    assert any("not drawn" in n for n in notes)
+
+
+def test_a_missing_log_image_is_reported_but_still_draws(tmp_path, monkeypatch):
+    """Without proc.jpg the right-hand half is blank — worth saying, but the
+    panel is still useful, so the picture is still produced."""
     import types
-    fake_xml = types.ModuleType("x")
+
+    from well_tools.report import ops_render
+
     monkeypatch.setattr("well_tools.core.xml_parser.parse_wellschematic_xml",
                         lambda p: None)
     monkeypatch.setattr("well_tools.core.xml_parser.build_pipe_summary",
                         lambda d: types.SimpleNamespace(to_dict=lambda how: []))
     monkeypatch.setattr("well_tools.report._wbcache.load", lambda *a, **k: None)
-
-    xml = tmp_path / "s.xml"
-    xml.write_text("<x/>")
-    notes = []
-    result = ops_service.build(
-        working_dir=str(tmp_path), img_folder=str(tmp_path), xml_path=str(xml),
-        excel_path="whatever", pipe_model=[], fields={}, well_name="HRDH-1702",
-        notes=notes)
-
-    assert result["workbook"] == calls["dest"]
-    assert result["workbook"].endswith("HRDH-1702_OPS.xlsx")
-    assert result["image"] is None
-    assert any("paste it into the report" in n for n in notes)
-
-
-def test_fill_warnings_reach_the_run_notes(tmp_path, monkeypatch):
-    import types
-
-    monkeypatch.setattr(ops_service.ops_fill, "fill_ops",
-                        lambda *a, **k: {"path": a[1], "warnings": ["something odd"],
-                                         "stray_images": 0})
     monkeypatch.setattr(ops_service, "collect_hotspots", lambda *a, **k: [])
-    monkeypatch.setattr(ops_service.ops_export, "render",
-                        lambda *a, **k: (_ for _ in ()).throw(
-                            ops_export.OpsExportError("no excel")))
-    monkeypatch.setattr("well_tools.core.xml_parser.parse_wellschematic_xml",
-                        lambda p: None)
-    monkeypatch.setattr("well_tools.core.xml_parser.build_pipe_summary",
-                        lambda d: types.SimpleNamespace(to_dict=lambda how: []))
-    monkeypatch.setattr("well_tools.report._wbcache.load", lambda *a, **k: None)
+
+    drawn = {}
+
+    def fake_render(template, dest, *a, **kw):
+        drawn["proc"] = kw.get("proc_path")
+        open(dest, "wb").write(b"png")
+        return {"path": dest, "size": (100, 200), "warnings": []}
+
+    monkeypatch.setattr(ops_render, "render_ops", fake_render)
 
     xml = tmp_path / "s.xml"
     xml.write_text("<x/>")
     notes = []
-    ops_service.build(working_dir=str(tmp_path), img_folder=str(tmp_path),
-                      xml_path=str(xml), excel_path="x", pipe_model=[],
-                      fields={}, notes=notes)
-    assert "something odd" in notes
+    result = ops_service.build(img_folder=str(tmp_path), xml_path=str(xml),
+                               excel_path="x", pipe_model=[], fields={},
+                               notes=notes)
 
-
-# --------------------------------------------------------------------------
-# The export step itself
-# --------------------------------------------------------------------------
-def test_export_refuses_clearly_off_windows():
-    """`available()` gates the COM call so the failure is a sentence about Excel
-    rather than an ImportError from deep inside pywin32."""
-    if ops_export.available():
-        pytest.skip("this machine can export")
-
-    with pytest.raises(ops_export.OpsExportError) as excinfo:
-        ops_export.render("book.xlsx", "out.png")
-    assert "Excel" in str(excinfo.value)
-
-
-def test_export_availability_matches_the_platform():
-    assert ops_export.available() == (os.name == "nt" and _has_pywin32())
-
-
-def _has_pywin32():
-    try:
-        import win32com.client  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    assert result == os.path.join(str(tmp_path), ops_service.OPS_IMAGE_NAME)
+    assert drawn["proc"] is None                    # not passed when absent
+    assert any("log half is blank" in n for n in notes)

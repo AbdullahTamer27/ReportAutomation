@@ -206,11 +206,9 @@ def generate(*, template_path, company_name, company_logo_path,
     try:
         if ops_service.wanted(extract_tags(template_path)):
             ops_service.build(
-                working_dir=working_dir,
                 img_folder=resolve_image_folder(working_dir),
                 xml_path=xml_path, excel_path=excel_path,
                 pipe_model=pipe_model, fields=fields,
-                well_name=fields.get("well_name"),
                 notes=notes, progress=log)
     except Exception as e:  # noqa: BLE001 — the summary never fails a report
         log(f"One-page summary failed: {e}")
