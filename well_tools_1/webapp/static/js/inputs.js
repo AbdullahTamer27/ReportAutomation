@@ -4,19 +4,38 @@
 import { els, pyapi, basename, hide, escapeHtml } from "./dom.js";
 import { state } from "./state.js";
 import { deriveConfigFromXml, computeDamageCount, previewConfig } from "./config.js";
-import { setFieldValue } from "./fields.js";
-import { ensureCompanies, resolveTemplate, refreshTemplateHint } from "./registry.js";
+import { setFieldValue, clearFields } from "./fields.js";
+import {
+  ensureCompanies, resolveTemplate, refreshTemplateHint, updateGenerateEnabled,
+} from "./registry.js";
 import { showView } from "./nav.js";
+
+// Parsing the workbook is the one slow step between choosing the inputs and
+// using the form, and it does not depend on anything chosen after it. Starting
+// it the moment the file is known means it is done by the time the form asks —
+// the user spends that time filling in the rest. Deliberately not awaited: it
+// is an optimisation, and nothing waits on it or reports it failing.
+function warmWorkbook(path) {
+  if (!path) return;
+  fetch("/api/workbook/warm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ excel_path: path }),
+  }).catch(() => {});
+}
+
+function setExcelPath(path) {
+  state.excelPath = path;
+  els.excelPath.textContent = path;
+  els.excelPath.classList.remove("muted");
+  warmWorkbook(path);
+}
 
 export async function pickExcel() {
   const api = pyapi();
   if (!api) return inputsError("Native file dialogs are only available in the desktop app.");
   const path = await api.pick_file(["Excel files (*.xlsx;*.xlsm)", "All files (*.*)"]);
-  if (path) {
-    state.excelPath = path;
-    els.excelPath.textContent = path;
-    els.excelPath.classList.remove("muted");
-  }
+  if (path) setExcelPath(path);
 }
 
 export async function browseFolder() {
@@ -31,6 +50,52 @@ function wellFolderHint(text, warn) {
   els.wellFolderHint.classList.toggle("hint-warn", !!warn);
 }
 
+// The schematic hint's resting wording lives in index.html. Read once at load so
+// the reset restores what the markup actually says, rather than a copy of it
+// here that would quietly drift the first time the sentence is reworded.
+const SCHEMATIC_HINT = els.schematicHint ? els.schematicHint.textContent : "";
+
+// Opening a well folder starts a new report, so nothing from the last one may
+// survive into it. The scan only ever *fills in what it finds*, which on its own
+// is silently wrong the second time round: a folder with no XML would keep the
+// previous well's configuration, and one with no workbook would generate the new
+// report from the previous well's data. Clearing first makes anything the new
+// folder lacks visibly absent instead.
+function resetWell() {
+  state.excelPath = null;
+  state.xmlPath = null;
+  state.configOk = false;
+
+  els.excelPath.textContent = "No file selected";
+  els.excelPath.classList.add("muted");
+  if (els.xmlReportPath) {
+    els.xmlReportPath.textContent = "No file selected";
+    els.xmlReportPath.classList.add("muted");
+  }
+
+  els.configInput.value = "";
+  els.configInput.classList.remove("prefilled");
+  els.configPreview.hidden = true;
+  els.configPreview.innerHTML = "";
+
+  els.damageCount.value = "0";
+  els.damageCount.classList.remove("prefilled");
+  els.damageCountHint.textContent = "";
+
+  schematicHintMsg(SCHEMATIC_HINT, false);
+  clearFields();
+  hide(els.inputsStatus);
+
+  // The workspace is a different view, so it keeps the previous report's result
+  // banner and rendered pages until something clears them. Going back for
+  // another well and returning would otherwise show the last well's preview.
+  els.previewPanel.hidden = true;
+  els.previewResult.innerHTML = "";
+  els.previewBody.innerHTML = "";
+
+  updateGenerateEnabled();
+}
+
 // --- One-folder intake: pick a well folder, auto-discover every input --------
 export async function openWellFolder() {
   const api = pyapi();
@@ -38,7 +103,7 @@ export async function openWellFolder() {
   const folder = await api.pick_folder();
   if (!folder) return;
 
-  hide(els.inputsStatus);
+  resetWell();
   wellFolderHint("Scanning folder…", false);
   let data;
   try {
@@ -57,9 +122,7 @@ export async function openWellFolder() {
   els.workingDirInput.value = data.working_dir || folder;
 
   if (data.excel_path) {
-    state.excelPath = data.excel_path;
-    els.excelPath.textContent = data.excel_path;
-    els.excelPath.classList.remove("muted");
+    setExcelPath(data.excel_path);        // starts the workbook parse in the background
   }
   if (data.xml_path) {
     state.xmlPath = data.xml_path;

@@ -195,6 +195,15 @@ class DamageCountResponse(BaseModel):
     warnings: list[str]
 
 
+class WarmRequest(BaseModel):
+    excel_path: str = Field(..., description="Absolute path to the .xlsx/.xlsm data workbook")
+
+
+class WarmResponse(BaseModel):
+    warmed: bool
+    ms: int
+
+
 class SchematicRequest(BaseModel):
     pdf_path: str = Field(..., description="Absolute path to the well-schematic PDF")
 
@@ -287,13 +296,49 @@ _HERE = (
 STATIC_DIR = os.path.join(_HERE, "webapp", "static") if getattr(sys, "frozen", False) \
     else os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Revalidate the UI's own files on every load — see NO_CACHE.
+#
+# Without a Cache-Control header a browser is free to invent a freshness
+# lifetime, and the usual heuristic is a tenth of the file's age: a module last
+# modified a month ago is treated as fresh for three days and served without
+# asking the server at all. The ETag never gets compared, because no request is
+# made. That is survivable on a website; here the updater swaps the exe and
+# relaunches into a WebView2 cache that outlives it, under URLs that never
+# change — so a user can run new Python against the previous build's
+# JavaScript, and a shipped fix simply fails to appear.
+#
+# "no-cache" does not mean "do not store": the file is still cached, the
+# browser just revalidates before using it, and an unchanged file comes back as
+# a 304 with no body (~0.8ms against ~1.2ms for the full response, over
+# localhost, for eighteen files totalling 150K). That is the whole cost of
+# never shipping an invisible fix.
+#
+# The alternative — fingerprinted URLs cached forever — would mean rewriting
+# every relative import in every module at build time. Not worth a build step
+# to save fifteen milliseconds on localhost.
+NO_CACHE = "no-cache"
+
+
+class RevalidatedStatic(StaticFiles):
+    """StaticFiles that asks the browser to check before reusing a file."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = NO_CACHE
+        return response
+
+
+app.mount("/static", RevalidatedStatic(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
 def index():
     """Serve the single-page frontend."""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    # The shell decides which modules load at all, so a stale one outlasts every
+    # other precaution here.
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"),
+                        headers={"Cache-Control": NO_CACHE})
 
 
 @app.on_event("startup")
@@ -404,6 +449,32 @@ def config_preview(req: ConfigPreviewRequest):
             logger.exception("Deepest-point read failed")
     return ConfigPreviewResponse(pipes=result["pipes"], warnings=result["warnings"],
                                  bottom_depth=bottom_depth)
+
+
+@app.post("/api/workbook/warm", response_model=WarmResponse)
+def workbook_warm(req: WarmRequest):
+    """Parse the data workbook into the shared cache, ahead of being asked for it.
+
+    Opening a formula-heavy .xlsm is the single slow step between choosing the
+    inputs and using the form: the first config preview pays ~0.4s here, longer
+    on a big workbook. Nothing about that work depends on the configuration, and
+    the file is chosen well before it is needed — so it happens while the rest of
+    the inputs are still being filled in, and the form is live on arrival.
+
+    Purely an optimisation: every consumer still loads the workbook the same way,
+    and a failure here changes nothing but the timing."""
+    import time
+
+    start = time.perf_counter()
+    warmed = False
+    try:
+        if os.path.isfile(req.excel_path):
+            from well_tools.report import _wbcache
+            _wbcache.load(req.excel_path, data_only=True)
+            warmed = True
+    except Exception:  # noqa: BLE001 — a cold cache is the only consequence
+        logger.exception("Workbook warm failed")
+    return WarmResponse(warmed=warmed, ms=int((time.perf_counter() - start) * 1000))
 
 
 @app.post("/api/config/from-xml", response_model=ConfigFromXmlResponse)

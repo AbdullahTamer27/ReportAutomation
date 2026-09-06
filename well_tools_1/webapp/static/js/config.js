@@ -24,6 +24,13 @@ export async function previewConfig() {
     updateGenerateEnabled();
     return;
   }
+  // Reading the workbook is usually already done (it is warmed when the file is
+  // chosen), but a cold one takes long enough that a blank panel and a disabled
+  // Generate button read as a broken form rather than a busy one.
+  els.configPreview.hidden = false;
+  els.configPreview.className = "config-preview";
+  els.configPreview.innerHTML =
+    `<span class="spinner"></span> Reading the workbook…`;
   try {
     const res = await fetch("/api/config/preview", {
       method: "POST",

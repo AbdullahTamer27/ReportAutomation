@@ -136,6 +136,18 @@ export function collectFields() {
   return out;
 }
 
+// Empty every rendered field and drop its auto-fill highlight. Used when a new
+// well folder is opened: the values on screen describe the previous well, and a
+// schematic that fills only some of them would otherwise leave the two mixed.
+export function clearFields() {
+  for (const f of FIELDS) {
+    const el = document.getElementById(f.dom_id);
+    if (!el) continue;
+    el.value = "";
+    el.classList.remove("prefilled", "field-error");
+  }
+}
+
 // Set a field's value and flag it as auto-filled (bronze) for review.
 export function setFieldValue(key, value) {
   const el = fieldInput(key);
