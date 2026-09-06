@@ -118,3 +118,37 @@ def test_a_missing_log_image_is_reported_but_still_draws(tmp_path, monkeypatch):
     assert result == os.path.join(str(tmp_path), ops_service.OPS_IMAGE_NAME)
     assert drawn["proc"] is None                    # not passed when absent
     assert any("log half is blank" in n for n in notes)
+
+
+# --------------------------------------------------------------------------
+# The summary and the document must agree
+# --------------------------------------------------------------------------
+def test_the_summary_gets_the_same_values_the_document_does():
+    """A date the Word report prints as 09-Sep-2020 must not reach the summary
+    as whatever the date picker sent. Both read one resolved dict, so the two
+    renderings cannot drift apart."""
+    from webapp import report_service
+    from webapp.field_registry import by_key
+
+    raw = {"well_name": "HRDH-1702", "log_date": "2020-09-09",
+           "orig_comp": "26 Apr 1988", "last_wko": ""}
+    defaulted = []
+    resolved = {k: report_service.resolve_field(by_key(k), raw, defaulted) for k in raw}
+
+    # The date picker's ISO, and a hand-typed date, both become the report's own.
+    assert resolved["log_date"] == "09-Sep-2020"
+    assert resolved["orig_comp"] == "26-Apr-1988"
+    # A blank optional date is "N/A" here, which the renderer also prints as N/A.
+    assert resolved["last_wko"] == report_service.OPTIONAL_DEFAULT
+    assert resolved["well_name"] == "HRDH-1702"
+
+
+def test_the_summary_is_handed_resolved_values_not_raw_ones():
+    """Guards the wiring: report_service must pass the resolved dict."""
+    import inspect
+
+    from webapp import report_service
+
+    src = inspect.getsource(report_service.generate)
+    call = src[src.index("ops_service.build("):]
+    assert "fields=resolved" in call[:400], "the summary is being handed raw form input"

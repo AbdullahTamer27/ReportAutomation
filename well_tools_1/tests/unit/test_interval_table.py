@@ -129,3 +129,58 @@ def test_pipe_channel_response_filled_from_records():
     resp = _find(grid, "Pipe channel response")
     assert resp[0][1:] == ["10-20-30-40", "12-33-44", "12-35"]   # block 1
     assert resp[1][1:] == ["9-9-9", "7", ""]                      # block 2 (2 intervals)
+
+
+def _label_merges(table):
+    """The vertical-merge state of each row's first cell, top to bottom:
+    "restart" starts a merged run, "continue" is absorbed into it, None is a
+    plain cell. Read from the XML because python-docx reports a merged cell in
+    every row it spans — the rendered text alone cannot tell the two apart."""
+    from docx.oxml.ns import qn
+
+    out = []
+    for row in table.rows:
+        tc = row._tr.findall(qn("w:tc"))[0]
+        tcPr = tc.find(qn("w:tcPr"))
+        vm = None if tcPr is None else tcPr.find(qn("w:vMerge"))
+        out.append(None if vm is None
+                   else ("restart" if vm.get(qn("w:val")) == "restart" else "continue"))
+    return out
+
+
+def test_the_tubular_label_is_written_once_per_block():
+    """A block with four pipes printed "Tubular size & weight" four times down
+    the first column. The label describes the group, so the rows share one cell."""
+    doc, table = _prototype_doc()
+    it.place_interval_table(None, _records(), doc=doc)
+
+    merges = _label_merges(table)
+    # 5 intervals -> two blocks of 4 and 3 pipes: one restart each, the rest absorbed.
+    assert merges.count("restart") == 2
+    assert merges.count("continue") == (4 - 1) + (3 - 1)
+
+    # The label survives exactly once in each merged run, with no blank
+    # paragraphs carried over from the rows it absorbed.
+    labelled = [r.cells[0] for r in table.rows
+                if r.cells[0].text.strip() == it.LBL_TUBULAR]
+    assert labelled, "the tubular label disappeared"
+    for cell in labelled:
+        assert len(cell.paragraphs) == 1
+
+
+def test_a_single_pipe_block_is_not_merged():
+    """Nothing to merge, so no merge markup — a lone row stays a plain cell."""
+    doc, table = _prototype_doc()
+    it.place_interval_table(None, [{"Start Depth (ft)": 5, "End Depth (ft)": 10,
+                                    "Configurations": ["A"], "Channels": [1],
+                                    "Offsets": [0.1]}], doc=doc)
+    assert _label_merges(table) == [None] * len(table.rows)
+
+
+def test_merging_leaves_the_pipe_values_alone():
+    """Only column 0 merges; every interval keeps its own configuration."""
+    doc, table = _prototype_doc()
+    it.place_interval_table(None, _records(), doc=doc)
+    tubular = [r for r in _grid(table) if r[0] == it.LBL_TUBULAR]
+    assert tubular[0][1:4] == ["A", "A", "A"]
+    assert tubular[3][1:4] == ["D", "/", "/"]     # only interval 1 has a 4th pipe

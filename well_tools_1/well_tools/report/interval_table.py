@@ -162,6 +162,35 @@ def _prototype_block(table):
     return proto
 
 
+def _empty_cell(cell):
+    """Reduce a cell to a single run-less ``<w:p>``.
+
+    ``set_cell_text(cell, "")`` leaves an empty *run* behind, and python-docx
+    only skips a cell it considers empty — one paragraph with no runs. Without
+    this the merge below carries a blank paragraph across for every row it
+    absorbs, and the merged label sits at the top of a cell padded with them."""
+    for p in cell.paragraphs[1:]:
+        p._p.getparent().remove(p._p)
+    first = cell.paragraphs[0]
+    for run in list(first.runs):
+        run._r.getparent().remove(run._r)
+
+
+def _merge_label_column(table, trs):
+    """Merge the label cells of a block's tubular rows into one tall cell.
+
+    The label describes the group, not each row: a block with four pipes printed
+    "Tubular size & weight" four times down the first column. Emptying the
+    continuations before merging is what leaves the label written once —
+    ``merge()`` moves the content of the cells it absorbs."""
+    if len(trs) < 2:
+        return
+    cells = [_Row(tr, table).cells[0] for tr in trs]
+    for cell in cells[1:]:
+        _empty_cell(cell)
+    cells[0].merge(cells[-1])
+
+
 def _fill_row(table, tr, label, values, ncols):
     """Set a block row: column 0 = its label, columns 1.. = one value per
     interval in the chunk (missing columns cleared)."""
@@ -244,6 +273,7 @@ def place_interval_table(output_path, records, well_name=None,
                 cfgs = iv.get("Configurations") or []
                 vals.append(cfgs[p] if p < len(cfgs) else "/")
             _fill_row(table, tr, LBL_TUBULAR, vals, ncols)
+        _merge_label_column(table, tubular_trs)   # one label for the pipe rows
         _fill_row(table, interp_tr, LBL_INTERP,
                   ["-".join(str(c) for c in (iv.get("Channels") or [])) for iv in chunk], ncols)
         _fill_row(table, response_tr, LBL_RESPONSE,                        # from the Channels sheet, else blank

@@ -94,7 +94,16 @@ def generate(*, template_path, company_name, company_logo_path,
     # Registry user fields the caller supplied — i.e. the ones the chosen template
     # declares (the form only sends those). Fields absent from the template aren't
     # sent, so they aren't defaulted or substituted (template-agnostic, Epic C3).
-    text_fields = {f.tag: _opt_field(f) for f in user_fields() if f.key in fields}
+    # Resolved once and kept keyed both ways: by tag for the document, by
+    # registry key for the one-page summary. The summary used to be handed the
+    # raw form values, so a date the document printed as 09-Sep-2020 appeared
+    # there as whatever the date picker sent. Resolving a second time instead
+    # would double the "left blank" note.
+    resolved = {}
+    text_fields = {}
+    for f in user_fields():
+        if f.key in fields:
+            text_fields[f.tag] = resolved[f.key] = _opt_field(f)
     # Unknown user-ish tags the template declared (no registry entry) — plain text.
     for key, val in fields.items():
         if by_key(key) is not None:
@@ -102,9 +111,9 @@ def generate(*, template_path, company_name, company_logo_path,
         tag = "{{" + str(key) + "}}"
         if val is None or not str(val).strip():
             defaulted.append(key)
-            text_fields[tag] = OPTIONAL_DEFAULT
+            text_fields[tag] = resolved[key] = OPTIONAL_DEFAULT
         else:
-            text_fields[tag] = str(val)
+            text_fields[tag] = resolved[key] = str(val)
     text_fields.update({
         # Delivery date = today's date, formatted like the other dates. Auto-filled.
         "{{delivery_date}}": datetime.now().strftime("%d-%b-%Y"),
@@ -208,7 +217,7 @@ def generate(*, template_path, company_name, company_logo_path,
             ops_service.build(
                 img_folder=resolve_image_folder(working_dir),
                 xml_path=xml_path, excel_path=excel_path,
-                pipe_model=pipe_model, fields=fields,
+                pipe_model=pipe_model, fields=resolved,
                 notes=notes, progress=log)
     except Exception as e:  # noqa: BLE001 — the summary never fails a report
         log(f"One-page summary failed: {e}")
